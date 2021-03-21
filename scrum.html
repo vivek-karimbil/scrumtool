@@ -1,0 +1,2529 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Scrum Project Manager</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre-exp.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre-icons.min.css">
+
+	<script src="https://cdn.jsdelivr.net/npm/@trevoreyre/autocomplete-js@latest/dist/autocomplete.min.js"></script>
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@trevoreyre/autocomplete-js@latest/dist/style.css">
+	<script src="https://cdn.jsdelivr.net/npm/dompurify@latest/dist/purify.min.js"></script>
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@latest/css/font-awesome.min.css">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/css/flag-icon.css">
+
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.3/dist/flatpickr.min.css">
+	<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.3/dist/flatpickr.min.js"
+		integrity="sha256-/irFIZmSo2CKXJ4rxHWfrI+yGJuI16Z005X/bENdpTY=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@json-editor/json-editor@latest/dist/nonmin/jsoneditor.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/imask@latest/dist/imask.min.js"></script>
+    <script>
+    // Set the default CSS theme and icon library globally
+    JSONEditor.defaults.options["theme"] = "spectre";
+    JSONEditor.defaults.options["iconlib"] = "spectre";
+	JSONEditor.defaults.options["disable_edit_json"] = 1;
+	JSONEditor.defaults.options["disable_properties"] = 1;
+    </script>
+	<style>
+	  .bar1 { fill: steelblue; }
+	  .bar2 { fill: deepskyblue; }
+	  .plainbar:hover {fill: orange; }
+	  .axis--x path { display: block; }
+	  .greenline {
+        fill: none;
+        stroke: green;
+        stroke-width: 3;
+	  }
+	  .redline {
+        fill: none;
+        stroke: red;
+        stroke-width: 3;
+	  }
+	  .greendot {
+        fill: green;
+        stroke: green;
+	  }
+	  .reddot {
+        fill: red;
+        stroke: red;
+	  }
+	  div.tooltip {
+		position: absolute;
+		text-align: left;
+		width: 90px;
+		height: 30px;
+		padding: 2px;
+		font: 12px sans-serif;
+		background: lightsteelblue;
+		border: 0px;
+		border-radius: 8px;
+		pointer-events: none;
+	  }
+	  .devburndown { width: 150px; }
+	</style>
+	<script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+      .container {
+        max-width:1600px;
+        margin: 0 auto
+      }
+	  .tiny { background-color: '##5755d9' }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+	  <div class='columns'>
+        <div class='column col-md-12'>
+		  <button id='load' class='btn btn-primary mr-2'>Load Project</button>
+          <button id='save' class='btn btn-primary mr-2'>Save Project</button>
+          <button id='restore' class='btn btn-primary mr-2'>Clear Project</button>
+          <span id='valid_indicator' class='label'></span>  
+        </div>
+      </div>
+	  <div id="dataentry">
+		<!-- Read data from file -->
+		<div id='dataread' class='columns' style="display: none;">
+		  <br/><input type="file" onchange="readProjectFile(this)"><br/><br/>
+		</div>
+		<!-- Save data to file -->
+		<div id="datasave" style="display: none;">
+		  <br/><input id="projectfile" type="text" size="32">
+		  <button id='savefile' class='tiny'>Save</button>
+		  <br/>
+		</div>
+		<!-- Project editor -->
+		<div class='columns'>
+		  <div class='column col-md-12' id='editor_holder'></div>
+		</div>
+	  </div>
+    </div>
+    
+    <script>
+
+// includeJS("https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js")
+// includeCSS("https://pmk65.github.io/jedemov2/dist/examples/bloodhound.css")
+// includeCSS("https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.3.0/css/flag-icon.css")
+
+	  window.JSONEditor.defaults.callbacks = {
+		"autocomplete": {
+		  "search_reqtId": function searchReqtID(requirement, input) {
+			var ed = editor.getEditor('root.backlog.scope');
+			if (!ed) return [];
+			
+			var reqtpath = requirement.path.match(/root.tracking.scope.[0-9]+/)[0];
+			var description = editor.getEditor(reqtpath + ".description").getValue();
+			if (description) {
+			  var feature = ed.getValue().filter(r => r.destcription == description);
+			  if (feature.length) {
+			    return feature[0].feature;
+			  }
+			}
+			var planned = editor.getEditor("root.tracking.scope")
+			  .getValue().map(r => r.id);
+			var data = ed.getValue().map(r => r.feature)
+			  .filter(r => planned.filter(s => s == r).length == 0);
+			return data.filter(function(item) {
+			  return item.toLowerCase().startsWith(input.toLowerCase());
+			});
+		  },
+		  "search_reqt": function search(requirement, input) {
+			var ed = requirement.jsoneditor.getEditor('root.backlog.scope');
+			if (!ed) return [];
+			var reqtpath = requirement.path.match(/root.tracking.scope.[0-9]+/)[0];
+			if (id = document.querySelector('[data-schemapath="' + reqtpath + '.id"] input').value) {
+			  data = ed.getValue().filter(r => r.feature == id).map(r => r.destcription)
+			}
+			else {
+			  planned = requirement.jsoneditor.getEditor("root.tracking.scope")
+			    .getValue().map(r => r.description);
+			  data = ed.getValue().map(r => r.destcription)
+			    .filter(r => planned.filter(s => s == r).length == 0);
+			}
+			return data.filter(function(item) {
+			  return item.toLowerCase().startsWith(input.toLowerCase());
+			});
+		  }
+		}
+	  };
+	  window.JSONEditor.defaults.callbacks.template = {
+	    "setBDWeeks": setBDWeeks,
+	    "setMSStartDates": setMSStartDates,
+		"dontChange": (j, e) => e.self,
+		"enumDevTitleCB": (jseditor, e) => e.item.name,
+		"enumDevValueCB": (jseditor, e) => e.item.name,
+		"enumMSTitleCB": (jseditor, e) => e.item.milestone,
+		"enumMSValueCB": (jseditor, e) => e.item.milestone,
+		"enumFilterCB": (jseditor, e) => {
+		  if (jseditor.path.endsWith('developer')) {
+		    if (e.item.role == 'QA') return "";
+			return e.item.name;
+		  }
+		  if (jseditor.path.endsWith('qa')) {
+		    if (e.item.role != 'QA') return "";
+			return e.item.name;
+		  }
+		  if (jseditor.key == 'milestone') {
+		    return e.item.milestone;
+		  }
+		  return "";
+		}
+	  };
+
+	  projectschema = {
+        // Enable fetching schemas via ajax
+        ajax: true,
+        
+        // The schema for the editor
+        schema: {
+		  "title": "Scrum Project Editor",
+		  "type": "object",
+		  "form_name_root": "scrumproject",
+		  "format": "categories",
+		  "options": {
+			"disable_collapse": true,
+			"compact": true
+		  },
+		  "properties": {
+			"backlog": {
+			  "type": "object",
+			  "title": "Planning",
+			  "options": {
+				"disable_collapse": true,
+				"compact": true
+			  },
+			  "properties": {
+				"scope": {
+				  "title": "Product Backlog",
+				  "type": "array",
+				  "format": "table",
+				  "uniqueItems": true,
+				  "items": {
+					"title": "Requirement",
+					"type": "object",
+					"properties": {
+					  "feature": {
+						"title": "ID",
+						"type": "string",
+						"options": {
+						  "input_width": "100px"
+						}
+					  },
+					  "destcription": {
+						"title": "Description",
+						"type": "string",
+						"format": "textarea",
+						"options": {
+						  "input_height": "18px",
+						  "input_width": "600px"
+						}
+					  },
+					  "criticality": {
+						"title": "Importance",
+						"type": "string",
+						"enum": [
+						  "Must",
+						  "High want",
+						  "Want",
+						  "Nice to have"
+						],
+						"default": "High want",
+						"options": {
+						  "input_width": "150px"
+						}
+					  },
+					  "storypoints": {
+						"title": "Story pts",
+						"type": "number",
+						"default": 5,
+						"options": {
+						  "input_width": "50px"
+						}
+					  },
+					  "days": {
+						"title": "Days",
+						"type": "number",
+						"default": 5,
+						"options": {
+						  "input_width": "50px"
+						}
+					  }
+					}
+				  }
+				}
+			  }
+			},
+			"bandwidth": {
+			  "title": "Bandwidth",
+			  "type": "object",
+			  "id": "bandwidth",
+			  "format": "grid-strict",
+			  "options": {
+				"disable_collapse": true,
+				"compact": true
+			  },
+			  "properties": {
+				"projectname": {
+				  "title": "Project Name",
+				  "type": "string",
+				  "options": {
+					"infoText": "Name of the project will default to the file name to be saved.",
+					"grid_columns": 4
+				  }
+				},
+				"startdate": {
+				  "title": "Start Date",
+				  "type": "string",
+				  "format": "date",
+				  "options": {
+					"infoText": "Start date of first milestone of the project.",
+					"grid_columns": 2,
+					"grid_break": true,
+					"flatpickr": {
+					  "inlineHideInput": true,
+					  "wrap": true,
+					  "dateFormat": 'd/m/Y',
+					  "enable": [
+						function (date) { return (date.getDay() === 1)}
+					  ],
+					  "allowInput": true
+					}
+				  }
+				},
+				"enddate": {
+				  "title": "End Date",
+				  "type": "string",
+				  "options": {
+				    "hidden": true
+				  }
+				},
+				"team": {
+				  "title": "Team",
+				  "type": "array",
+				  "format": "table",
+				  "uniqueItems": true,
+				  "options": {
+				    "grid_columns": 3,
+					"disable_array_reorder": true
+				  },
+				  "items": {
+					"title": "Team member",
+					"type": "object",
+					"properties": {
+					  "name": {
+						"title": "Name",
+						"type": "string"
+					  },
+					  "role": {
+						"title": "Role",
+						"type": "string",
+						"enum": [
+						  "Lead",
+						  "Developer",
+						  "QA"
+						],
+						"default": "Developer"
+					  }
+					}
+				  }
+				},
+				"milestones": {
+				  "title": "Milestones",
+				  "type": "array",
+				  "id": "milestones",
+				  "format": "tabs-top",
+				  "options": {
+				    "grid_columns": 6,
+					"grid_break": true,
+					"disable_array_reorder": true,
+					"disable_array_delete": false,
+					"disable_array_delete_all_rows": true,
+					"disable_array_delete_last_row": true
+				  },
+				  "items": {
+					"type": "object",
+					"title": "Milestone",
+					"id": "thisms",
+					"headerTemplate": "M{{ i1 }}",
+					"format": "grid-strict",
+					"options": {
+					  "disable_collapse": true,
+					  "compact": true
+					},
+					"properties": {
+					  "milestone": {
+						"title": "Name",
+						"type": "string",
+						"options": {
+						  "grid_columns": 1,
+						  "hidden": true
+						 }
+					  },
+					  "msstartdate": {
+						"title": "Start",
+						"type": "string",
+						"template": "setMSStartDates",
+						"watch": {
+						  "msstart": "bandwidth.startdate",
+						  "msend": "bandwidth.enddate",
+						  "msduration": "thisms.duration"
+						},
+						"options": {
+						  "grid_columns": 2,
+						}
+					  },
+					  "duration": {
+						"title": "Weeks",
+						"type": "integer",
+						"options": {
+						  "input_width": "100px",
+						  "grid_columns": 2,
+						  "grid_break": true
+						},
+						"default": 4
+					  },
+					  "capacity": {
+						"title": "Capacity",
+						"type": "array",
+						"format": "table",
+						"options": {
+						  "disable_array_add": true,
+						  "disable_array_delete": true,
+						  "disable_array_reorder": true
+						},
+						"items": {
+						  "title": "Developer",
+						  "type": "object",
+						  "properties": {
+							"developer": {
+							  "title": "Developer",
+							  "type": "string",
+							  "template": "dontChange"
+							},
+							"availability": {
+							  "title": "Availabe %",
+							  "type": "string",
+							  "input_width": "100px",
+							  "options": {
+							    "imask": {
+								  "mask": "val{%}",
+								  "lazy": false,
+								  "blocks": {
+									"val": {
+									  "mask": "Number",
+									  "radix": "."
+									}
+								  }
+								}
+							  }
+							},
+							"vacation": {
+							  "title": "Days off",
+							  "type": "number",
+							  "input_width": "100px"
+							}
+						  }
+						}
+					  }
+					},
+				  }
+				},
+				"blackoutweeks": {
+				  "title": "Blackout weeks",
+				  "type": "array",
+				  "format": "table",
+				  "uniqueItems": true,
+				  "items": {
+					"title": "Week",
+					"type": "object",
+					"properties": {
+					  "reason": {
+						"title": "Reason",
+						"type": "string"
+					  },
+					  "week": {
+						"title": "Week",
+						"type": "string",
+						"format": "date",
+						"options": {
+						  "flatpickr": {
+							"inlineHideInput": true,
+							"wrap": true,
+							"dateFormat": 'd/m/Y',
+							"enable": [
+							  function (date) { return (date.getDay() === 1)}
+							],
+							"allowInput": true
+						  }
+						}
+					  }
+					}
+				  }
+				}
+			  }
+			},
+			"tracking": {
+			  "id": "bandwidth",
+			  "type": "object",
+			  "title": "Tracking",
+			  "options": {
+				"disable_collapse": true,
+				"compact": true
+			  },
+			  "properties": {
+				"scope": {
+				  "title": "Scope",
+				  "type": "array",
+				  "format": "table",
+				  "uniqueItems": true,
+				  "options": {
+				    "compact": true,
+					"disable_collapse": true
+				  },
+				  "items": {
+					"title": "Requirements",
+					"type": "object",
+					"options" : {
+					  "disable_array_delete_all_rows": true
+					},
+					"properties": {
+					  "id": {
+						"title": "ID",
+						"type": "string",
+						"format": "autocomplete",
+						"options": {
+						  "input_width": "100px",
+						  "autocomplete": {
+							"search": "search_reqtId",
+							"autoSelect": true
+						  }
+						}
+					  },
+					  "description": {
+						"title": "Description",
+						"type": "string",
+						"format": "autocomplete",
+						"options": {
+						  "input_height": "35px",
+						  "input_width": "300px",
+						  "autocomplete": {
+							"search": "search_reqt",
+							"autoSelect": true
+						  }
+						}
+					  },
+					  "resources": {
+						"title": "Team ",
+						"type": "object",
+						"options": {
+						  "collapsed": false,
+						  "compact": true
+						},
+						"properties": {
+						  "developer": {
+							"title": "Dev",
+							"type": "string",
+							"options": {
+							  "input_width": "100px"
+							},
+							"watch": {
+							  "team": "root.bandwidth.team"
+							},
+							"enumSource": [{
+							  "source": "team",
+							  "filter": "enumFilterCB",
+							  "title": "enumDevTitleCB",
+							  "value": "enumDevValueCB"
+							}]
+						  },
+						  "qa": {
+							"title": "QA",
+							"type": "string",
+							"options": {
+							  "input_width": "100px"
+							},
+							"watch": {
+							  "team": "root.bandwidth.team"
+							},
+							"enumSource": [{
+							  "source": "team",
+							  "filter": "enumFilterCB",
+							  "title": "enumDevTitleCB",
+							  "value": "enumDevValueCB"
+							}]
+						  }
+						}
+					  },
+					  "status": {
+						"title": "Status ",
+						"type": "string",
+						"options": {
+						  "input_width": "130px"
+						},
+						"enum": [ "Not started",
+						  "In progress",
+						  "Impeded",
+						  "Obsolete",
+						  "Completed"
+						],
+						"default": "Not started"
+					  },
+					  "notes": {
+						"title": "Notes",
+						"type": "string",
+						"format": "textarea",
+						"options": {
+						  "input_height": "18px",
+						  "input_width": "300px"
+						}
+					  },
+					  "milestone": {
+						"title": "MS ",
+						"type": "string",
+						"options": {
+						  "input_width": "80px"
+						},
+						"watch": {
+						  "milestones": "root.bandwidth.milestones"
+						},
+						"enumSource": [{
+						  "source": "milestones",
+						  "filter": "enumFilterCB",
+						  "title": "enumMSTitleCB",
+						  "value": "enumMSValueCB"
+						}]
+					  },
+					  "estimate": {
+						"title": "Est.",
+						"type": "integer",
+						"options": {
+						  "input_width": "60px"
+						}
+					  },
+					  "burndown": {
+						"title": "Burndown ",
+						"type": "object",
+						"options": {
+						  "collapsed": false
+						},
+						"properties": {
+						  "milestones": {
+							"title": "Milestones",
+						    "type": "array",
+							"format": "tabs-top",
+							"options": {
+							  "compact": false,
+							  "disable_collapse": true,
+							  "disable_array_add": true,
+							  "disable_array_delete": true,
+							  "disable_array_delete_all_rows": true,
+							  "disable_array_delete_last_row": true,
+							  "disable_array_reorder": true
+							},
+							"items": {
+							  "title": "Milestone",
+							  "type": "object",
+							  "headerTemplate": "M{{ i1 }}",
+							  "format": "grid-strict",
+							  "options": {
+								"disable_collapse": true,
+								"compact": true
+							  },
+							  "properties": {
+								"milestone": {
+								  "title": "Name",
+								  "type": "string",
+								  "options": {
+									"hidden": true
+								   }
+								},
+								"remaining": {
+								  "title": "Remaining",
+								  "type": "array",
+								  "format": "table",
+								  "options": {
+									"compact": true,
+									"disable_collapse": true,
+									"disable_array_add": true,
+									"disable_array_delete": true,
+									"disable_array_delete_all_rows": true,
+									"disable_array_delete_last_row": true,
+									"disable_array_reorder": true
+								  },
+								  "items": {
+									"type": "object",
+									"format": "grid-strict",
+									"options": {
+									  "compact": true,
+									  "disable_collapse": true
+									},
+									"properties": {
+									  "date": {
+									    "title": "Date",
+									    "type": "string",
+										"template": "setBDWeeks",
+										"watch": {
+										  "msstart": "bandwidth.startdate",
+										  "msend": "bandwidth.enddate"
+										},
+										"options": {
+										  "compact": true,
+										  "input_width": "105px",
+										  "grid_columns": 4
+										}
+									  },
+									  "effort": {
+									    "title": "Effort",
+									    "type": "integer",
+										"options": {
+										  "compact": true,
+										  "input_width": "50px",
+										  "grid_columns": 4
+										}
+									  }
+									}
+								  }
+								}
+							  }
+							}
+						  }
+						}
+					  }
+					}
+				  }
+				}
+			  }
+			},	
+			"graphs": {
+			  "type": "object",
+			  "title": "Graphs",
+			  "options": {
+				"disable_collapse": true,
+				"compact": true
+			  },
+			  "properties": {
+				"paper": {
+				  "type": "info",
+				  "description": "<div id='projectgraphs' style='display: none;'>Beep</div>"
+				}
+			  }
+			},
+			"settings": {
+			  "type": "object",
+			  "title": "Settings",
+			  "options": {
+				"disable_collapse": true,
+				"compact": true
+			  },
+			  "properties": {
+				"taborder": {
+				  "title": "Tab order",
+				  "type": "array",
+				  "format": "table",
+				  "options": {
+					"disable_array_reorder": false,
+					"disable_array_add": true,
+					"disable_array_delete": true,
+					"disable_array_delete_all_rows": true,
+					"disable_array_delete_last_row": true
+				  },
+				  "items": {
+					"title": "Tab",
+					"type": "object",
+					"properties": {
+					  "tabname": {
+						"type": "string",
+						"template": "dontChange"
+					  }
+					},
+					"options": {
+					  "input_width": "150px"
+					}
+				  }
+				}
+			  }
+			}
+		  }
+		}
+	  }
+
+      // Initialize the editor
+      var editor = new JSONEditor(document.getElementById('editor_holder'), projectschema);
+
+	  // Hook up the load button to log to the console
+	  document.getElementById('load').addEventListener('click', function() {
+	    var dataread = document.getElementById("dataread");
+		if (dataread.style.display === "none") {
+		  dataread.style.display = "block";
+		  document.getElementById('load').textContent = "Cancel Load";
+		}
+		else {
+		  dataread.style.display = "none";
+		  document.getElementById('load').textContent = "Load Project";
+		}
+	  });
+	  
+	  // Hook up the save button
+      document.getElementById('save').addEventListener('click', function() {
+	    var datasave = document.getElementById("datasave");
+		if (datasave.style.display === "none") {
+		  datasave.style.display = "block";
+		  var projectname = editor.getEditor('root.bandwidth.projectname').getValue();
+		  if(!projectname || projectname == '') projectname = 'Project';
+		  var dta = (new Date() + '').split(' ');
+		  var tma = dta[4].split(':');
+		  var dt = [dta[3], dta[1], dta[2], 'T', tma[0],tma[1], tma[2]].join('.');
+		  document.getElementById('projectfile').value = projectname + '.' + dt + '.json';
+		  document.getElementById('save').textContent = "Cancel Save";
+		}
+		else {
+		  datasave.style.display = "none";
+		  document.getElementById('save').textContent = "Save Project";
+		}
+	  });
+	  
+	  document.getElementById('savefile').addEventListener('click', function(e) {
+		e.preventDefault();
+        var d = new Date();
+		var filename = document.getElementById('projectfile').value;
+		var project = editor.getValue();
+		project.bandwidth.milestones.forEach(m => delete m.dtstart);
+		delete project.graphs;
+		blob = new Blob([JSON.stringify(project, null, 2)], {
+		  type: "application/json;charset=utf-8"
+		});
+		if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+		  window.navigator.msSaveOrOpenBlob(blob, filename);
+		} else {
+		  var a = document.createElement('a');
+		  a.download = filename;
+		  a.href = URL.createObjectURL(blob);
+		  a.dataset.downloadurl = ['text/plain', a.download, a.href].join(':');
+		  
+		  a.dispatchEvent(new MouseEvent('click', {
+			'view': window,
+			'bubbles': true,
+			'cancelable': false
+		  }));
+		}
+		document.getElementById("datasave").style.display = "none";
+      });
+	  
+      // Hook up the Restore to Default button
+      document.getElementById('restore').addEventListener('click',function() {
+		editor.destroy();
+        editor = new JSONEditor(document.getElementById('editor_holder'), projectschema);
+      });
+
+      // Hook up the validation indicator to update its 
+      // status whenever the editor changes
+      editor.on('change', function () {
+	    // console.log('change function invoked');
+        // Get an array of errors from the validator
+        var errors = editor.validate();
+        
+        var indicator = document.getElementById('valid_indicator');
+        
+        // Not valid
+        if(errors.length) {
+          indicator.className = 'label alert';
+          indicator.textContent = 'not valid';
+        }
+        // Valid
+        else {
+          indicator.className = 'label success';
+          indicator.textContent = 'valid';
+        };
+      });
+
+	  // When MS added to bandwidth or new requirement added in tracking 
+	  editor.on('addRow', jseditor => {
+		// console.log('addRow', (jseditor && jseditor.path) ? jseditor.path : "No/null parameter,", jseditor);
+		// console.trace();
+		
+//******************** Adding new MS to Bandwidth
+		// If new milestone added to bandwidth
+		if (jseditor && jseditor.path && jseditor.path.match(/bandwidth\.milestones\.[0-9]+$/)) {
+//-------------------- Add bandwidth configuration to MS
+		  var ms = jseditor.path.match(/[0-9]+$/)[0];
+		  var msName = 'M' + (parseInt(ms) + 1);
+		  jseditor.editors.milestone.setValue(msName);
+		 		  
+		  // When adding Milestones, add all developers to bandwidth of all milestones
+		  // if adding the first MS, create developer list 'manualy'
+		  if (ms == '0') {
+			var team = jseditor.parent.parent.editors.team.value.filter(d => d.role != "QA");
+			var teamDevs = team.filter(a => a.name.length && a.role != 'QA');
+			var msDevs = teamDevs.map(d => {
+			  return {
+			    "developer": d.name,
+			    "availability": d.role == "Lead" ? 40: 80,
+			    "vacation": 2
+			  }
+			});
+			jseditor.editors.capacity.setValue(msDevs);
+		  }
+		  else { // Else copy capacity from first MS
+			jseditor.editors.capacity.setValue(jseditor.parent.rows[0].value.capacity);
+		  }
+		  
+		  // Initialize milestone start date from project start date
+		  var startdate = jseditor.parent.parent.editors.startdate.getValue();
+		  if (startdate) {
+			var msdate = ddmmyyyyToDate(startdate);
+			var milestones = jseditor.parent.getValue();
+			for (var m in milestones) {
+			   milestones[m].msstartdate = msdate;
+			   msdate.setDate(msdate.getDate() + (milestones[m].duration * 7));
+			}
+			jseditor.parent.setValue(milestones);
+		  }
+
+//-------------------- Add MS to all requirements being tracked		  
+		  // Initialize date array for MS; to be added to all requirements
+		  var msSchedule = {
+		    "milestone": msName,
+			"remaining": []
+		  };
+		  var startdate = jseditor.parent.parent.editors.startdate.getValue();
+		  var dtstart = ddmmyyyyToDate(startdate);
+		  var milestones = jseditor.parent.parent.editors.milestones.getValue();
+		  for (var m = 0; m < ms; m++) {
+		    dtstart.setDate(dtstart.getDate() + (milestones[m].duration * 7));
+		  }
+		  
+		  // Create a template of week dates. Effort comes later from each requirement
+		  var msweeks = jseditor.parent.parent.editors.milestones.rows[ms].editors.duration.getValue();
+		  for (var w = 0; w < msweeks; w++) {
+		    msSchedule.remaining.push({
+			  "date": ddmm(dtstart),
+			  "effort": 0
+			});
+			dtstart.setDate(dtstart.getDate() + 7);
+		  }
+		  
+		  // Add new MS to all requirements being tracked
+		  var scope =  jseditor.parent.parent.parent.editors.tracking.editors.scope.getValue();
+		  for (var r in scope) {
+		    // If burndown does not contain MS, add MS
+			if (!scope[r].burndown.milestones.filter(m => m.milestone == msName).length){
+			  var effort = scope[r].estimate;
+			  // If there was burndown, take effort from last week of last MS
+			  if (effort > 0 && scope[r].burndown.milestones.length) {
+			    var lastMS = scope[r].burndown.milestones.length - 1;
+				var lastWk = scope[r].burndown.milestones[lastMS].remaining.length - 1;
+				effort = scope[r].burndown.milestones[lastMS].remaining[lastWk].effort;
+			  }
+			  for (var wk = 0; wk < msSchedule.remaining.length; wk++) {
+			    msSchedule.remaining[wk].effort = effort;
+			  }
+			  scope[r].burndown.milestones.push(msSchedule);
+			}
+		  }
+		  editor.getEditor('root.tracking.scope').setValue(scope);
+
+		  setProjectEndDate();
+		}
+		
+//******************** Automatically added MS to requirement in burndown
+		if (jseditor && jseditor.path && jseditor.path.match(/tracking\.scope\.[0-9]+\.burndown\.milestones\.[0-9]+$/)) {
+		  var scopeindex = parseInt(jseditor.path.match(/scope\.[0-9]*/)[0].match(/[0-9]+/)[0]);
+		  var msindex = parseInt(jseditor.path.match(/milestones\.[0-9]*/)[0].match(/[0-9]+/)[0]);
+		  if (msindex > 0) {
+		    // Get last effort from last MS
+			var path = 'root.tracking.scope.'+scopeindex+'.burndown.milestones.'+(msindex - 1);
+			var lastMS = editor.getEditor(path).getValue();
+			var lasteffort = lastMS.remaining[lastMS.remaining.length - 1].effort;
+			var milestone = jseditor.getValue();
+			for (var w = 0; w < milestone.remaining.length; w++) {
+			  milestone.remaining[w].effort = lasteffort;
+			}
+			jseditor.setValue(milestone);
+			highLightThisWeek();
+		  }
+		}
+
+//******************** When a row is added to a Tab other than the first one, the jseditor
+// passed is null. This can happen is a new row is added either to the 'Tracking' or 'Backlog' tabs
+		if (!jseditor || !jseditor.path) {
+		  var milestones = editor.getEditor('root.bandwidth.milestones').getValue();
+		  if (!milestones || !milestones.length) return;
+		  var scope = editor.getEditor('root.tracking.scope').getValue();
+		  for (var r in scope) {
+			if (scope[r].burndown.milestones.length < milestones.length) {
+			  for (var i = scope[r].burndown.milestones.length; i < milestones.length; i++) {
+				scope[r].burndown.milestones.push({
+				  "milestone": "M" + (parseInt(i) + 1),
+				  "remaining": remainingEffort(i)
+				});
+			  }
+			}
+		  }
+		  editor.unwatch('root.tracking.scope');
+		  editor.getEditor('root.tracking.scope').setValue(scope);
+		  editor.watch('root.tracking.scope', watchScopeChange);
+		}
+	  });
+	  
+	  editor.on('deleteRow', ed => {
+		console.log('deleteRow: Entering with', ed.path);
+		var startdate = editor.getEditor('root.bandwidth.startdate').getValue();
+		if (!startdate || startdate.length == 0) return;
+		  
+		if (ed && ed.path) {
+		  if (ed.path.match(/root.tracking.scope.[0-9]+/)) {
+// WORKAROUND: Prevents exception after deleting requirement
+			editor.getEditor('root.tracking.scope').setValue(project.tracking.scope);
+		  }
+		  if (ed.path.match(/root.bandwidth.milestones.[0-9]+/)) {
+			setProjectEndDate();
+			unwatchScopeChange();
+			var milestones = editor.getEditor("root.bandwidth.milestones").getValue();
+			var scope = editor.getEditor('root.tracking.scope').getValue();
+			for (var m = 0; m < milestones.length; m++) {
+			  var oldMS = milestones[m].milestone;
+			  milestones[m].milestone = "M" + (m + 1);
+			  scope.filter(s => s.milestone == oldMS).forEach(s => s.milestone = "M" + (m + 1));
+			}
+			editor.getEditor("root.bandwidth.milestones").setValue(milestones);
+			editor.getEditor("root.tracking.scope").setValue(scope);
+			watchScopeChange();
+		  }
+		}
+	  });
+
+	  // Set up column expansion / collision for scope table
+	  editor.on('ready', function() {
+		addFilterButton("th:nth-child(3)", /root.tracking.scope.[0-9]+.resources$/,
+		  toggler, 'collapse', 'Hide');
+		addFilterButton("th:nth-child(4)", /root.tracking.scope.[0-9]+.status$/,
+		  showFilter, 'expand', 'Expand all');
+		addFilterButton("th:nth-child(6)", /root.tracking.scope.[0-9]+.milestone$/,
+		  showFilter, 'expand', 'Expand all');
+		addFilterButton("th:nth-child(8)", /root.tracking.scope.[0-9]+.burndown$/,
+		  toggler, 'collapse', 'Hide');
+		highLightThisWeek();
+		setFirstTab();
+	  });
+	  
+	  // When resources change, sync all MS with resource list
+	  editor.watch('root.bandwidth.team', () => {
+	    // console.log('watch root.bandwidth.team');
+		let teamDevs = editor.getEditor("root.bandwidth.team")
+			.getValue().filter(a => a.name.length && a.role != 'QA');
+		var project = editor.getValue();
+		
+		// For every MS
+		for (var ms in project.bandwidth.milestones) {
+		  var capacity = project.bandwidth.milestones[ms].capacity;
+		  var capacityKey = 'root.bandwidth.milestones.' + ms + '.capacity';
+		  
+		  // For all developers in team, check in this MS
+		  for (var d in teamDevs) {
+			// Developer found in team, but not in milestone capacity
+			if (!capacity.filter(f => f.developer == teamDevs[d].name).length) {
+			  var capacity = editor.getEditor(capacityKey).getValue();
+			  capacity.push({ "developer": teamDevs[d].name, "availability": 80, "vacation": 2 });
+			  editor.getEditor(capacityKey).setValue(capacity);
+			}
+		  }
+		  
+		  // Filter out non-developers in MS capacity
+		  var toDelete = [];
+		  for (var c in capacity) {
+			if (!teamDevs.filter(f => f.name == capacity[c].developer).length > 0) {
+			  toDelete.push(capacity[c].developer);
+			}
+		  }
+		  for (var d in toDelete) {
+		    capacity = capacity.filter(c => c.developer != toDelete[d]);
+		  }
+		  editor.getEditor(capacityKey).setValue(capacity);
+		}
+		
+	  });
+
+	  editor.watch('root.settings.taborder', setTabOrder);
+	  
+	  // For scope changes, such as adding new MSs, change in estimate
+	  editor.watch('root.tracking.scope', watchScopeChange);
+
+	  function readProjectFile(input) {
+		document.getElementById('load').textContent = "Load Project";
+	    document.getElementById("dataread").style.display = "none";
+	    let file = input.files[0];
+		let reader = new FileReader();
+		reader.readAsText(file);
+		reader.onload = function() {
+		  var project = JSON.parse(reader.result);
+		  project.graphs = {};
+		  unwatchScopeChange();
+		  editor.setValue(project);
+// WORKAROUND: Bug prevents burndown to be registered after first MS on setValue()
+		  editor.getEditor('root.tracking.scope').setValue(project.tracking.scope);
+		  // Set order of tabs
+		  setFirstTab();
+		  setCurentMSInScope();
+		  watchScopeChange();
+		};
+		reader.onerror = function() {
+		  console.log(reader.error);
+		};
+	  }
+
+	  // Highligt the remaining effort for the current week
+	  function highLightThisWeek() {
+		project = editor.getValue();
+		ms = getCurrentMS(project);
+		if (ms < 0) return;
+		
+		today = new Date();
+		weekno = Math.floor((today - getDateMSStart(ms)) / (7 * 24 * 3600 * 1000));
+		milestone = project.bandwidth.milestones[ms];
+		if (weekno >= milestone.duration) return;
+
+		for (var j in project.tracking.scope) {
+		  path = "root.tracking.scope." + j + ".burndown.milestones." + ms
+			+ ".remaining." + weekno + ".effort";
+		  effortinput = document.querySelector("[data-schemapath='" + path + "'] input");
+		  if (effortinput) effortinput.style["backgroundColor"] = "yellow";
+		}
+	  }
+	  
+	  // Sets the order of tabs in the UI according to the stored preferences
+	  function setTabOrder() {
+		let formtabs = editor.getEditor("root.settings.taborder").getValue()
+		  .map(t => t.tabname);
+		let tabs = document.querySelector('#Bandwidth').parentElement;
+		for (var t = formtabs.length; t > 0; t--) {
+		  tabs.prepend(tabs.querySelector("#" + formtabs[t - 1]));
+		}
+	  }
+	  
+	  // Set first table
+	  function setFirstTab() {
+		if (editor.getEditor("root.settings.taborder").getValue().length == 0) {
+		  editor.getEditor("root.settings.taborder").setValue([
+			{ "tabname": "Planning" },
+			{ "tabname": "Bandwidth" },
+			{ "tabname": "Tracking" },
+			{ "tabname": "Graphs" },
+			{ "tabname": "Settings" }
+		  ]);
+		}
+		var firsttab = editor.getEditor("root.settings.taborder")
+		  .getValue()[0].tabname;
+		setTabOrder();
+		document.querySelector("#" + firsttab + " > a")
+		  .dispatchEvent(new MouseEvent("click", {"view": window, "bubbles": true}));
+	  }
+	  
+	  // Select the current MS tab in all scope rows
+	  function setCurentMSInScope() {
+		var project = editor.getValue();
+		var currentMS = getCurrentMS(project);
+		editor.getEditor("root.tracking.scope").rows
+		  .map(e => e.path).forEach(p => {
+			document.querySelector("[id='" + p + ".burndown.milestones."
+			+ currentMS + "']")
+			.dispatchEvent(new MouseEvent("click", {
+			  "view": window,
+			  "bubbles": true
+			  }));
+		  });		
+	  }
+	  
+	  // Project end date set by adding the length of all MSs to start date
+	  function setProjectEndDate() {
+		var startdate = editor.getEditor('root.bandwidth.startdate').getValue();
+		if (!startdate || startdate.length == 0) return;
+
+		var projectlength = editor.getEditor("root.bandwidth.milestones").getValue()
+		    .map(m => m.duration).reduce((a, b) => a + b);
+		var projectstart = ddmmyyyyToDate(startdate);
+		var projectend = new Date(projectstart);
+		projectend.setDate(projectstart.getDate() + (projectlength * 7));
+		editor.getEditor("root.bandwidth.enddate").setValue(ddmm(projectend));
+	  }
+	  
+	  // Add button at column header for filter menu of column
+	  function addFilterButton(column, pattern, callback, action, buttonhint) {
+		jseditor = editor.getEditor("root.tracking.scope");
+		button = jseditor.getButton('', action, buttonhint);
+		button.value = action == 'collapse' ? '1' : '0';
+		button_holder = editor.root.theme.getHeaderButtonHolder();
+		button_holder.appendChild(button);
+		jseditor.container.querySelector(column)
+		  .insertAdjacentElement('beforeend', button_holder);
+		button.addEventListener('click', function(e) {
+		  callback(e, pattern, this, column);
+		}, false)
+	  }
+
+	  // Display filters for column (MS or status)
+	  function showFilter(e, pattern, button, column) {
+	    e.preventDefault();
+		e.stopPropagation();
+		button.value = button.value == '1' ? '0' : '1';
+		column == "th:nth-child(4)" ? makeStatusList(column) : makeMSFilterList(column);
+		
+		// Change the text/icon on the button
+		if (button.value == '1') {
+		  // Expand
+		  jseditor.setButtonText(button,'','collapse','Collapse');
+		  jseditor.container.querySelector(column).querySelector("div")
+		    .style.display = "";
+		}
+		else {
+		  // Collapse
+		  jseditor.setButtonText(button,'','expand','Expand');
+		  jseditor.container.querySelector(column).querySelector("div")
+		    .style.display = "none";
+		}
+	  }
+
+	  // Add filters for requirement statuses
+	  function addStatusCheckBox(rstatus, jseditor) {
+	    const checkbox = jseditor.theme.getCheckbox();
+		checkbox.style.width = 'auto';
+		const label = jseditor.theme.getCheckboxLabel(rstatus);
+		const control = jseditor.theme.getFormControl(label, checkbox);
+		control.style.paddingBottom = control.style.marginBottom
+		  = control.style.paddingTop = control.style.marginTop = 0;
+		control.style.height = 'auto';
+		jseditor.addstatus_list.appendChild(control);
+		var editors = editor.getEditor('root.tracking.scope')
+		  .rows.filter(r => editor.getEditor(r.path).getValue().status == rstatus)
+		  .map(e => e.path);
+		checkbox.checked = editors
+		  .map(e => document.querySelector('[data-schemapath="' + e + '"]')
+		    .style.display)
+		  .filter(e => e == "none").length == 0;
+		checkbox.addEventListener('change', () => {
+		  if (checkbox.checked) {
+			editors.forEach(e => document.querySelector('[data-schemapath="' + e + '"]')
+			  .style.display = '');
+		  }
+		  else {
+			editors.forEach(e => document.querySelector('[data-schemapath="' + e + '"]')
+			  .style.display = 'none');
+		  }
+		});
+		jseditor.addstatus_checkboxes[rstatus] = checkbox;
+		return checkbox;
+	  }
+
+	  // Add filters for MS
+	  function addMSCheckBox(ms, jseditor) {
+	    const checkbox = jseditor.theme.getCheckbox();
+		checkbox.style.width = 'auto';
+		const label = jseditor.theme.getCheckboxLabel(ms + " Milestone");
+		const control = jseditor.theme.getFormControl(label, checkbox);
+		control.style.paddingBottom = control.style.marginBottom
+		  = control.style.paddingTop = control.style.marginTop = 0;
+		control.style.height = 'auto';
+		jseditor.addproperty_list.appendChild(control);
+		var editors = editor.getEditor('root.tracking.scope')
+		  .rows.filter(r => editor.getEditor(r.path).getValue().milestone == ms)
+		  .map(e => e.path);
+		checkbox.checked = editors
+		  .map(e => document.querySelector('[data-schemapath="' + e + '"]')
+		    .style.display)
+		  .filter(e => e == "none").length == 0;
+		checkbox.addEventListener('change', () => {
+		  if (checkbox.checked) {
+			editors.forEach(e => document.querySelector('[data-schemapath="' + e + '"]')
+			  .style.display = '');
+		  }
+		  else {
+			editors.forEach(e => document.querySelector('[data-schemapath="' + e + '"]')
+			  .style.display = 'none');
+		  }
+		});
+		jseditor.addproperty_checkboxes[ms] = checkbox;
+		return checkbox;
+	  }
+
+	  // Make MS List for filter
+	  function makeMSFilterList(column) {
+		if (!jseditor.addproperty_holder)
+		  jseditor.addproperty_holder = jseditor.theme.getModal();
+	    if (!jseditor.addproperty_list)
+		  jseditor.addproperty_list = document.createElement('div');
+		jseditor.addproperty_list.classList.add('property-selector');
+		if (jseditor.addproperty_checkboxes)
+		  jseditor.addproperty_list.innerHTML = '';
+		jseditor.addproperty_checkboxes = {};
+		editor.getEditor("root.bandwidth.milestones").getValue()
+		  .map(m => m.milestone).forEach(ms => {
+			addMSCheckBox(ms, jseditor);
+		  });
+		jseditor.addproperty_holder.appendChild(jseditor.addproperty_list);
+		const spacer = document.createElement('div');
+		spacer.style.clear = 'both';
+		jseditor.addproperty_holder.appendChild(spacer);
+		jseditor.container.querySelector(column)
+		  .insertAdjacentElement('beforeend', jseditor.addproperty_holder);
+	  }
+
+	  // Make list of values of requirement sttaus
+	  function makeStatusList(column) {
+		if (!jseditor.addstatus_holder)
+		  jseditor.addstatus_holder = jseditor.theme.getModal();
+	    if (!jseditor.addstatus_list)
+		  jseditor.addstatus_list = document.createElement('div');
+		jseditor.addstatus_list.classList.add('property-selector');
+		if (jseditor.addstatus_checkboxes)
+		  jseditor.addstatus_list.innerHTML = '';
+		jseditor.addstatus_checkboxes = {};
+		editor.schema.properties.tracking.properties.scope.items.properties.status.enum
+		  .forEach(s => {
+			addStatusCheckBox(s, jseditor);
+		  });
+		jseditor.addstatus_holder.appendChild(jseditor.addstatus_list);
+		const spacer = document.createElement('div');
+		spacer.style.clear = 'both';
+		jseditor.addstatus_holder.appendChild(spacer);
+		jseditor.container.querySelector(column)
+		  .insertAdjacentElement('beforeend', jseditor.addstatus_holder);
+	  }
+
+	  // Toggle the MS visibility
+	  function toggler(e, pattern, button) {
+		e.preventDefault();
+		e.stopPropagation();
+		// Toggle the value on the button
+		button.value = button.value == '1' ? '0' : '1';
+
+		// Change the text/icon on the button
+		if (button.value == '1') {
+		  // Expand
+		  jseditor.setButtonText(button,'','collapse','Collapse All');
+		}
+		else {
+		  // Collapse
+		  jseditor.setButtonText(button,'','expand','Expand All');
+		}
+		
+		// Loop through all jseditors
+		Object.keys(editor.editors)
+		  .filter(a => a.match(pattern))
+		  .forEach(key => {
+		  if (editor.editors.hasOwnProperty(key)) {
+			var ed = editor.editors[key];
+			
+			if (['array', 'object'].indexOf(ed.schema.type) !== -1 && ed.editor_holder) {
+			  if (button.value == '1') {
+				// Expand
+				ed.editor_holder.style.display = '';
+				ed.collapsed = false;
+				ed.setButtonText(ed.collapse_control,'','collapse','Collapse');
+			  }
+			  else {
+				// Collapse
+				ed.editor_holder.style.display = 'none';
+				ed.collapsed = true;
+				ed.setButtonText(ed.collapse_control,'','expand','Expand');
+			  }
+			}
+		  }
+		})
+	  }
+  
+ 	  function watchScopeChange() {
+	    // console.log('scope change');
+	    editor.unwatch('root.tracking.scope');
+		// Check and set up any mising listeners for all requirements
+		// Every requirements should have estimate and tracking listeners
+		var scope = editor.getEditor("root.tracking.scope").getValue();
+		for (var r in scope) {
+		  // Set up listener for estimate changes
+		  var path = 'root.tracking.scope.' + r + '.estimate';
+		  if (!editor.watchlist[path])
+			editor.watch(path, () => { estimateChanged(scope[r], r); });
+
+		  var milestones = scope[r].burndown.milestones;
+		  for (var m in milestones) {
+			var weeks = milestones[m].remaining;
+			for (var w in weeks) {
+			  var path = 'root.tracking.scope.' + r + '.burndown.milestones.' + m +
+			    '.remaining.' + w + '.effort';
+			  if (!editor.watchlist[path]) {
+				var path = 'root.tracking.scope.' + r + '.burndown.milestones.' + m +
+				  '.remaining.' + w + '.effort';
+				editor.watch(path, () => burndownChanged(r, m, w));
+			  }
+			}
+		  }
+		}
+		editor.watch('root.tracking.scope', watchScopeChange);
+	  }
+	  
+	  function unwatchScopeChange()  {
+		Object.keys(editor.watchlist)
+		  .filter(l => l.startsWith('root.tracking')).forEach(l => editor.unwatch(l));
+	  }
+
+	  // Get start Date() of MS 
+	  function getDateMSStart(msnumber) {
+	    var startdate = editor.getEditor('root.bandwidth.startdate').getValue();
+		if (!startdate || !startdate.length) return false;
+		var msdate = ddmmyyyyToDate(startdate);
+		var milestones = editor.getEditor("root.bandwidth.milestones").getValue();
+		for (var ms = 0; ms < msnumber; ms++) {
+		  msdate.setDate(msdate.getDate() + (7 * milestones[ms].duration));
+		}
+		return msdate;
+	  }
+
+	  // Convert a Date() to ddmm
+	  function ddmm(date) {
+		return date.getDate() + '/' + (date.getMonth() + 1);
+	  }
+	  
+	  // Get the effort burndown rows for the requirement
+	  function remainingEffort(msnumber) {
+		var remaining = [];
+		var milestone = editor.getEditor('root.bandwidth.milestones.' + msnumber).getValue();
+		// If miletstone has a start date, initialize dates of each week
+		var dtstart = getDateMSStart(msnumber);
+		if (dtstart) { // set start date of each week
+		  for (var w = 0; w < milestone.duration; w++){
+		    remaining.push({
+			  "date": ddmm(dtstart),
+			  "effort": 0
+			});
+			dtstart.setDate(dtstart.getDate() + 7);
+		  }
+		}
+		else { // set empty date of each week
+		  for (var w = 0; w < milestone.duration; w++){
+		    remaining.push({
+			  "date": "",
+			  "effort": 0
+			});
+		  }
+		}
+		return remaining;
+	  }
+	  
+	  function estimateChanged(requirement, r) {
+		// console.log('Estimate changed for requirement[' + r + ']');
+	    editor.unwatch('root.tracking.scope');
+		var estimate = editor.getEditor('root.tracking.scope.' + r + '.estimate').getValue();
+		var burndown = editor.getEditor('root.tracking.scope.' + r + '.burndown').getValue();
+		for (var m in burndown.milestones) {
+			for (var w in burndown.milestones[m].remaining) {
+			  burndown.milestones[m].remaining[w].effort = estimate;
+			}
+		}
+		editor.getEditor('root.tracking.scope.' + r + '.burndown').setValue(burndown);
+	    editor.watch('root.tracking.scope', watchScopeChange);
+	  }
+	  
+	  function burndownChanged(r, m, w) {
+	    // console.log('Burndown change: r[' + r + '].m[' + m + '.w[' + w + ']');
+		var burndownpath = 'root.tracking.scope.' + r + '.burndown';
+	    var path = burndownpath + '.milestones.' + m + '.remaining.' + w + '.effort';
+		if (!editor.getEditor(path)) return;
+		unwatchScopeChange();
+		var effort = editor.getEditor(path).getValue();
+		var burndown = editor.getEditor(burndownpath).getValue();
+		var wk = w;
+		for (var ms = m; ms < burndown.milestones.length; ms++) {
+		  while (wk < burndown.milestones[ms].remaining.length) {
+		    burndown.milestones[ms].remaining[wk].effort = effort;
+			wk++;
+		  }
+		  wk = 0;
+		}
+		var ed = editor.getEditor(burndownpath);
+		if (ed) ed.setValue(burndown);
+		watchScopeChange();
+	  }
+	  	  
+	  // Set the start date of the MS in the Bandwidth tab
+	  // Called when duration of any MS changes
+	  function setMSStartDates(jseditor, e) {
+		var startdate = editor.getEditor('root.bandwidth.startdate').getValue();
+		if (!startdate || startdate.length == 0) return "";
+		// thisMS is the one that changed
+		var thisMS = parseInt(jseditor.path.split('.')[3]);
+		var milestones = editor.getEditor('root.bandwidth.milestones').getValue();
+		
+		// If start date of project was changed
+		if (thisMS == 0 && milestones.length && milestones[0].msstartdate &&
+		  milestones[0].msstartdate != startdate.split('/')
+		  .map(d => parseInt(d)).filter(i => i < 32).join("/")) {
+console.log("Start date changed");
+		  realignBurndown(milestones);
+		}
+		// If a MS duration was changed
+		// When a MS is deleted, this function gets (inexplicably) called with multiple instances
+		// of a MS in the list
+		if (milestones.length >= thisMS && milestones[thisMS] 
+		  && allUnique(milestones)) {
+		  milestones[thisMS].duration = e.msduration;
+		  realignBurndown(milestones);
+		  var enddate = getDateMSStart(0);
+		  enddate.setDate(enddate.getDate() + milestones.map(m => m.duration)
+		    .reduce((a, b) => a + b) * 7)
+		  editor.getEditor("root.bandwidth.enddate").setValue(ddmm(enddate));
+		}
+
+		return ddmm(getDateMSStart(thisMS));
+	  }
+	  
+	  // Converts dd/mm/yyyy string to Date(). Does not check for format match exactly
+	  function ddmmyyyyToDate(indate) {
+		var dateparts = indate.split('/');
+		return new Date(dateparts[2] + '-' + dateparts[1] + '-' + dateparts[0]);
+	  }
+
+	  // Checks that no milestone in a list is repeated
+	  function allUnique(milestones) {
+	    for (var m in milestones) {
+		  if (milestones.filter(ms => ms.milestone == milestones[m].milestone).length > 1)
+			return false;
+		}
+		return true;
+	  }
+
+	  // Setup the burndown data from scrath across all milestones
+	  function realignBurndown(milestones) {
+		var startdate = editor.getEditor('root.bandwidth.startdate').getValue();
+		if (!startdate || startdate.length == 0 || milestones.length == 0) return;
+
+		// Setup array of dates, based on start date and MS lengths
+		var projectduration = milestones.map(m => m.duration).reduce((a, b) => a + b);
+		var msdate = getDateMSStart(0);
+		var weeks = [];
+		for (var w = 0; w < projectduration; w++) {
+		  weeks.push(ddmm(msdate));
+		  msdate.setDate(msdate.getDate() + 7);
+		}
+
+		// For each requirement, get the existing burndown data
+		var scope = editor.getEditor('root.tracking.scope').getValue()
+		  // Drop requirements that dont belong to an MS in list
+		  .filter(s => milestones.filter(m => m.milestone == s.milestone).length);
+		var burndown = [];
+		scope.forEach(s => burndown.push({
+		  "id": s.id,
+		  "burndown": s.burndown.milestones
+			.map(m => m.remaining)
+			.reduce((a, b) => a.concat(b))
+		}));
+
+		// For each date in new schedule, create burndown for each requirement
+		// with leading estimate, burndown data, or trailing last value
+		scope.forEach(s => {
+		  var effort = s.estimate;
+		  var reqt = { "id": s.id, "remaining": [] };
+		  // For each week in new schedule, copy old data
+		  weeks.forEach(w => {
+			// If week data existed for this week, use it, else use previos effort
+			var oldbd = burndown.filter(r => r.id == s.id)[0]
+			  .burndown.filter(b => b.date == w);
+			if (oldbd.length > 0) effort = oldbd[0].effort;
+			reqt.remaining.push({"date": w, "effort": effort});
+		  });
+		  // Copy burndown data back to requirement
+		  var startweek = 0;
+		  s.burndown.milestones = [];
+		  for (var m in milestones) {
+		    s.burndown.milestones.push({
+			  "milestone": "M" + (parseInt(m) + 1),
+			  "remaining": reqt.remaining
+				.slice(startweek, milestones[m].duration + startweek)
+			});
+			startweek += milestones[m].duration;
+		  }
+		});
+		// console.log("realignBurndown: Adjusted burndown:", showBD(scope));
+		unwatchScopeChange();
+		editor.getEditor('root.tracking.scope').setValue(scope);
+		watchScopeChange();
+	  }
+	  
+	  function showBD(scope) {
+		return scope.map(s => {
+		  return {
+			"id": s.id,
+			"ms": s.milestone,
+			"burndown": s.burndown.milestones.map(m => m.remaining.map(r => r.effort)
+			  .join(',')).reduce((a, b) => a + " : " + b)
+		  }
+		});
+	  }
+	  
+	  // Now redundant, but kept to keep the field read only
+	  function setBDWeeks (jseditor, e) {
+		return jseditor.getValue();
+	  }
+	  	  
+	  // Check for the various File API support.
+	  if (window.File && window.FileReader && window.FileList && window.Blob) {
+	    // Great success! All the File APIs are supported.
+	  } else {
+	    alert('The File APIs are not fully supported in this browser.');
+	  }
+	  
+	  // Return the current MS 
+	  function getCurrentMS(project) {
+		// If no start date or no milestones, return -1
+		if (!project.bandwidth.startdate || !project.bandwidth.milestones.length) return -1;
+		var today = new Date();
+		if (today <= getDateMSStart(0)) return 0;
+		if (today >= getDateMSStart(project.bandwidth.milestones.length - 1))
+		  return project.bandwidth.milestones.length - 1;
+	    for (var m = 0; m < project.bandwidth.milestones.length - 1; m++) {
+		  var thisms = getDateMSStart(m);
+		  var nextms = getDateMSStart(m + 1);
+		  if (today >= thisms && today < nextms) return m;
+		}
+		return -1;
+	  }
+
+	  // Capacity for the MS. Removes blackout weeks
+	  function getMSCapacity(project, ms) {
+		var blackoutweeks = project.bandwidth.blackoutweeks
+		  .map(function(w) {
+			p = w.week.split('/');
+			return parseInt(p[0]) + '/' + parseInt(p[1]);
+		  });
+		var msweeks = remainingEffort(ms).map(w => w.date);
+		var workingweeks = msweeks
+		  .filter(w => !blackoutweeks.filter(b => b == w).length);
+		var devdays = workingweeks.length * 5;
+		var totalcapacity = 0;
+		var capacity = project.bandwidth.milestones[ms].capacity;
+		for (var c in capacity) {
+		  devcapacity = Math.floor(((capacity[c].availability / 100) * devdays))
+		    - capacity[c].vacation;
+		  totalcapacity += devcapacity > 0 ? devcapacity : 0;
+		}
+		return totalcapacity;
+	  }
+
+	  // Gets the ddmm dates for the MS
+	  function getWeeks(ms) {
+		var duration = editor.getEditor("root.bandwidth.milestones." + ms).getValue().duration;
+		var dt = getDateMSStart(ms);
+		var weeks = [];
+		for (var w = 0; w < duration; w++) {
+		  weeks.push(ddmm(dt));
+		  dt.setDate(dt.getDate() + 7);
+		}
+		return weeks;
+	  }
+	  
+	  // Get the weekly burndown data for the MS, from sum of estimates to 0
+	  function getMSBurndown(scope, ms) {
+		var requirements = scope
+		  .filter(w => w.milestone == 'M' + (parseInt(ms) + 1)
+		    && w.status != 'Obsolete'); // All requirement in this MS
+		if (requirements.length)
+		  requirements = requirements.map(s => s.burndown.milestones[ms].remaining);
+		
+		var efforts = [{ 'week': 'Start', 'total': getMSEstimate(ms) }];
+		getWeeks(ms).forEach(w => {
+		  var total = 0;
+		  for (var r in requirements) {
+			total += requirements[r].filter(wk => wk.date == w)[0].effort
+		  }
+		  efforts.push({ 'week': w, 'total': total });
+		});
+		return efforts;
+	  }
+	  
+	  // Get data for stacked burndown
+	  function getMSFeatureBurndown(project, ms) {
+		var requirements = project
+		  .tracking
+		  .scope
+		  .filter(w => w.milestone == 'M' + (parseInt(ms) + 1)
+		    && w.status != 'Obsolete');
+		for (var r = 0; r < requirements.length; r++) {
+		  if (!requirements[r].id) {
+			requirements[r].id = 'M' + (parseInt(ms) + 1) + '-R' + r;
+		  }
+		}
+		
+		var reqts =  requirements.map(r => r.id);
+		reqts.unshift("group");
+		var weeks = getWeeks(ms);
+		weeks.unshift("Start");
+		var dataset = [reqts];
+		for (var w in weeks) {
+		  var rlist = [];
+		  for (var r in reqts) {
+			if (r == 0) {
+			  rlist.push(weeks[w]);
+			}
+			else {
+			  if (w == 0) { // First row, use estimates
+			    rlist.push(requirements[r - 1].estimate)
+			  }
+			  else {
+				rlist.push(requirements[r - 1].burndown.milestones[ms]
+				  .remaining.filter(r => r.date == weeks[w])[0].effort);
+			  }
+			}
+		  }
+		  dataset.push(rlist);
+		}
+		return dataset.slice(1, dataset.length)
+		  .map(d => {
+			var v = {};
+			for (var i in dataset[0]) {
+			  v[dataset[0][i]] = d[i];
+			}
+			return v;
+		  });
+	  }
+	  
+	  function getDevMSBurndown(project, ms) {
+		var requirements = project
+		  .tracking
+		  .scope
+		  .filter(w => w.milestone == 'M' + (parseInt(ms) + 1)
+		    && w.status != 'Obsolete');
+		var weeks = getWeeks(ms);
+		weeks.unshift("Start");
+		var teamDevs = editor.getEditor("root.bandwidth.team")
+			.getValue().filter(a => a.name.length && a.role != 'QA')
+			.map(d => d.name);
+		var dataset = [];
+		for (var w in weeks) {
+		  var workweek = { "group": weeks[w] };
+		  for(var d in teamDevs) {
+			workweek[teamDevs[d]] = requirements
+			  .filter(r => r.resources.developer == teamDevs[d]);
+			if (weeks[w] == 'Start') {
+			  if (workweek[teamDevs[d]].length) {
+				workweek[teamDevs[d]] = workweek[teamDevs[d]]
+				  .map(r => r.estimate)
+				  .reduce((a, b) => a + b);
+			  }
+			  else {
+				workweek[teamDevs[d]] = 0;
+			  }
+			}
+			else {
+			  if (workweek[teamDevs[d]].length) {
+				workweek[teamDevs[d]] = workweek[teamDevs[d]]
+				  .map(r => r.burndown.milestones[ms].remaining
+				  .filter(s => s.date == weeks[w])
+				  .map(r => r.effort)[0])
+				  .reduce((a, b) => a + b);
+			  }
+			  else {
+				workweek[teamDevs[d]] = 0;
+			  }
+			}
+		  }
+		  dataset.push(workweek);
+		}
+		return dataset;
+	  }
+	  
+	  function getProjectBurndown(project) {
+	    var burndown = project
+		  .tracking
+		  .scope
+		  .filter(w =>  w.status != 'Obsolete')
+		  .map((s) => s.burndown.milestones.map(m => m.remaining).reduce((m1, m2) => m1.concat(m2)));
+		var weeks = burndown[0].map(r => r.date);
+		var totalEstimate = project
+		  .tracking
+		  .scope
+		  .filter(w =>  w.status != 'Obsolete')
+		  .map(r => r.estimate)
+		  .reduce((s, e) => s + e);
+		var efforts = [{ 'week': 'Start', 'total': totalEstimate }];
+	  }
+
+	  // Get the highest burndown remaining for this MS in all weeks
+	  function getMaxRemainder(project, ms) {
+		return Math.max(...(getMSBurndown(project.tracking.scope, ms).map(m => m.total)));
+	  }
+
+	  // Sum of estimates for all requirements in MS
+	  function getMSEstimate(ms) {
+		var requirements = editor.getValue()
+		  .tracking
+		  .scope
+		  .filter(w => w.milestone == 'M' + (parseInt(ms) + 1));
+		return requirements.length ?
+		  requirements.map(r => r.estimate)
+		  .reduce((t, e) => t + e) : 0;
+	  }
+
+	  function getRemaimingDays(project, ms, developer) {
+		var today = new Date();
+		var msstart = getDateMSStart(ms);
+		var msend = new Date();
+		var duration = project.bandwidth.milestones[ms].duration;
+		msend.setDate(msstart.getDate() + duration * 7);
+		// If the MS is already over
+		if (today >= msend) return 0;
+		// If the MS hasnt started, full capacity is left
+		var capacity = project
+		  .bandwidth
+		  .milestones[ms]
+		  .capacity.filter(c => c.developer == developer);
+		if (today <= msstart) {
+		  return (duration * 5) * (capacity[0].availability / 100) - capacity[0].vacation; 
+		}
+		// If MS is in progress, remaining effort in the MS
+		return Math.floor((msend.getTime() - today.getTime()) / (msend.getTime() -  msstart.getTime())
+		  * (duration * 5) * (capacity[0].availability / 100));
+	  }
+
+	  function getWorkingWeeks(project, ms) {
+		var blackoutweeks = getBlackedOutWeeks(project);
+		return remainingEffort(ms).map(w => w.date)
+		  .filter(w => !blackoutweeks.filter(b => b == w).length);
+	  }
+	  
+	  // Get dd/mm version of blacked out weeks
+	  function getBlackedOutWeeks(project) {
+		return project.bandwidth.blackoutweeks
+		  .map(function(w) {
+			p = w.week.split('/');
+			return parseInt(p[0]) + '/' + parseInt(p[1]);
+		  });
+	  }
+//----------------- Graphs --------------------------------------------
+	  
+	  function milestonebd() {
+		var project = editor.getValue();
+		// WORKAROUND: Bug causes scope not to sync
+		project.tracking.scope = editor.getEditor("root.tracking.scope").getValue();
+		var ms = getCurrentMS(project);
+		if (ms < 0) return;
+		var margin = {top: 20, right: 20, bottom: 30, left: 40},
+		  width = 600,
+		  height = 300;
+		
+		// Set up left and right screen halves
+		var board = d3.select("#graph")
+		  .append("div")
+		  .style("width", '100%')
+		  .style("height", '100%');
+		// Select MS dropdown
+		board.append("div")
+		  .append("text")
+		  .text("Milestone: ")
+		  .append("select")
+		  .style("width", '100%')
+		  .attr("id", "selectMS")
+		  .style("width", '50px')
+		  .selectAll("milestones")
+		  .data(project.bandwidth.milestones.map(m => m.milestone))
+		  .enter()
+		  .append("option")
+		  .text(d => d)
+		  .attr("value", d => parseInt(d.substring(1)) - 1);
+		d3.select('#selectMS').property('value', ms);
+		var leftGraph = board.append("div")
+		  .attr("id", "leftGraph")
+		  .style("width", "50%")
+		  .style("height", "100%")
+		  .style("float", "left");
+		var rightGraph = board.append("div")
+		  .attr("id", "rightGraph")
+		  .style("margin-left", "50%")
+		  .style("height", "100%");
+		d3.select("#selectMS").on("change", function(d) {
+          var ms = d3.select(this).property("value");
+		  document.getElementById("leftGraph").textContent = '';
+		  document.getElementById("rightGraph").textContent = '';
+		  drawGraphs(project, ms);
+		});
+		
+		function drawGraphs(project, ms) {
+		  // Ymax is max of capacity or remaining burndown
+		  ms = parseInt(ms);
+		  var capacity = getMSCapacity(project, ms);
+		  var maxremainder = getMaxRemainder(project, ms);
+		  var ymax = Math.max(capacity, maxremainder);
+		  var burndown = getMSBurndown(project.tracking.scope, ms);
+		  var workingweeks = getWorkingWeeks(project, ms);
+
+		  var duration = project.bandwidth.milestones[ms].duration;
+		  var slope = capacity / workingweeks.length;
+		  var blackoutweeks = getBlackedOutWeeks(project);
+		  for (var i = 0; i < duration + 1; i++) {
+			burndown[i].target = capacity;
+			if (i < burndown.length - 1 && blackoutweeks
+				.filter(w => w == burndown[i + 1].week).length == 0) {
+				capacity -= slope;
+			}
+		  }
+
+		  var xScale = d3.scaleBand()
+			.rangeRound([0, width])
+			.padding(0.2)
+			.domain(burndown.map(b => b.week));
+		  var yScale = d3.scaleLinear()
+			.rangeRound([height, 0])
+			.domain([0, ymax * 1.2]);
+
+		  var svg = leftGraph.append("svg")
+			.attr("width", "100%")
+			.attr("height", height + margin.top + margin.bottom);
+		  // Tooltip
+		  var div = leftGraph.append("div")
+			.attr("class", "tooltip")
+			.style("opacity", 0);
+		  // Chart title
+		  svg.append("text")
+			.attr("x", (width / 2))
+			.attr("y", margin.top)
+			.attr("text-anchor", "middle")
+			.style("font-size", "20px")
+			.style("text-decoration", "underline")
+			.text("Mileston Burndown");
+		  var g = svg.append("g")
+			.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+		  // height of axis-x from bottom of graph
+		  g.append("g")
+			.attr("class", "axis axis--x")
+			.attr("transform", "translate(0," + height + ")")
+			.call(d3.axisBottom(xScale));
+		  // axis-y
+		  g.append("g")
+			.attr("class", "axis axis--y")
+			.call(d3.axisLeft(yScale));
+		  var bar = g.selectAll("rect")
+			.data(burndown)
+			.enter().append("g");
+
+		  // Bars
+		  bar.append("rect")
+			.attr("x", d => xScale(d.week))
+			.attr("y", d => yScale(d.total))
+			.attr("width", xScale.bandwidth())
+			.attr("height", d => height - yScale(d.total))
+			.attr("class", "plainbar bar1");
+		  // labels on the bar chart
+		  bar.append("text")
+			.attr("dy", "1.3em")
+			.attr("x", d => xScale(d.week) + xScale.bandwidth() / 2)
+			.attr("y", d => yScale(d.total))
+			.attr("text-anchor", "middle")
+			.attr("font-family", "sans-serif")
+			.attr("font-size", "11px")
+			.attr("fill", "black")
+			.text(d => d.total > 0 ? d.total : '');
+
+		  // line charts
+		  var stretch = 0.1 * burndown[0].target;
+		  var greenline = d3.line()
+			.x((d, i) => xScale(d.week) + xScale.bandwidth() / 2)
+			.y(d => yScale(d.target));
+		  bar.append("path")
+			.attr("class", "greenline")
+			.attr("d", greenline(burndown));
+		  bar.append("circle")
+			.attr("class", "greendot")
+			.attr("cx", (d, i) => xScale(d.week) + xScale.bandwidth() / 2)
+			.attr("cy", d => yScale(d.target))
+			.attr("r", 3)
+			.on("mouseover", function(event, d) {
+				div.transition().duration(200).style("opacity", .9);
+				div.html("Week: " + d.week + "<br/>Capacity: " + Math.floor(d.target))
+					.style("left", (event.pageX) + "px")
+					.style("top", (event.pageY - 28) + "px");
+			})
+			.on("mouseout", function(d) {
+				div.transition().duration(500).style("opacity", 0);
+			});
+		  bar.append("text")
+			.attr("dx", "1.3em")
+			.attr("dy", "0.5em")
+			.attr("x", (d, i) => xScale(d.week) + xScale.bandwidth() / 2)
+			.attr("y", d => yScale(d.target))
+			.attr("text-anchor", "middle")
+			.attr("font-family", "sans-serif")
+			.attr("font-size", "11px")
+			.attr("fill", "black")
+			.text(d => d.target > 0 ? Math.floor(d.target) : '');
+
+		  var redline = d3.line()
+			.x((d, i) => xScale(d.week) + xScale.bandwidth() / 2)
+			.y(d => yScale(d.target + stretch));
+		  bar.append("path")
+			.attr("class", "redline")
+			.attr("d", redline(burndown));
+		  bar.append("circle")
+			.attr("class", "reddot")
+			.attr("cx", (d, i) => xScale(d.week) + xScale.bandwidth() / 2)
+			.attr("cy", d => yScale(d.target + stretch))
+			.attr("r", 3)
+			.on("mouseover", function(event, d) {
+				div.transition().duration(200).style("opacity", .9);
+				div.html("Week: " + d.week + "<br/>Stretch: " + Math.floor(d.target + stretch))
+					.style("left", (event.pageX) + "px")
+					.style("top", (event.pageY - 28) + "px");
+			})
+			.on("mouseout", function(d) {
+				div.transition().duration(500).style("opacity", 0);
+			});
+		  bar.append("text")
+			.attr("dx", "1.3em")
+			.attr("dy", "0.5em")
+			.attr("x", (d, i) => xScale(d.week) + xScale.bandwidth() / 2)
+			.attr("y", d => yScale(d.target + stretch))
+			.attr("text-anchor", "middle")
+			.attr("font-family", "sans-serif")
+			.attr("font-size", "11px")
+			.attr("fill", "black")
+			.text(d => Math.floor(d.target + stretch));
+//--------------------------------------------------------------------------------------------
+		  var milestone = project.bandwidth.milestones[ms];
+		  var capacity = milestone.capacity;
+		  var scope = project.tracking.scope.filter(s => s.milestone == 'M' + (ms + 1));
+		  var data = capacity.map(c => {
+			return {
+			  "Developer": c.developer,
+			  "Planned availability": (milestone.duration * 5) * (c.availability / 100) - c.vacation,
+			  "Assigned work": scope.filter(s => s.resources.developer == c.developer).length ?
+				scope.filter(s => s.resources.developer == c.developer)
+				  .map(r => r.estimate).reduce((t, r) => t + r) :
+				0,
+			  "Remaining days": getRemaimingDays(project, ms, c.developer),
+			  "Remaining effort": scope
+			    .filter(s => s.resources.developer == c.developer
+				  && s.status != 'Complete' && s.status != 'Obsolete').length ?
+					scope.filter(s => s.resources.developer == c.developer
+					  &&s.status != 'Complete' && s.status != 'Obsolete')
+					.map(r => r.estimate).reduce((t, r) => t + r) : 0,
+			}
+		  });
+		  data.columns = Object.keys(data[0]);
+		  data.y = "Days";
+
+		  keys = data.columns.slice(1);
+		  groupKey = data.columns[0];
+
+		  xAxis = g => g
+			.attr("transform", `translate(0,${height + margin.bottom -10})`)
+			.call(d3.axisBottom(x0).tickSizeOuter(0));
+		  yAxis = g => g
+			.attr("transform", `translate(${margin.left},0)`)
+			.call(d3.axisLeft(y).ticks(null, "s"))
+			.call(g => g.select(".tick:last-of-type text").clone()
+			  .attr("x", 3)
+			  .attr("text-anchor", "start")
+			  .attr("font-weight", "bold")
+			  .text(data.y));
+
+		  color = d3.scaleOrdinal()
+			.range(["#6b486b", "#a05d56", "#d0743c", "#ff8c00", "#98abc5", "#8a89a6", "#7b6888"]);
+
+		  x0 = d3.scaleBand()
+			.domain(data.map(d => d[groupKey]))
+			.rangeRound([margin.left, width - margin.right])
+			.paddingInner(0.1);
+
+		  x1 = d3.scaleBand()
+			.domain(keys)
+			.rangeRound([0, x0.bandwidth()])
+			.padding(0.05);
+
+		  y = d3.scaleLinear()
+			.rangeRound([height + margin.bottom - 10, margin.top])
+			.domain([0, d3.max(data, d => d3.max(keys, key => d[key])) + 10]).nice();
+
+		  legend = svg => {
+			const g = svg
+			  .attr("transform", `translate(${width},0)`)
+			  .attr("text-anchor", "end")
+			  .attr("font-family", "sans-serif")
+			  .attr("font-size", 10)
+			  .selectAll("g")
+			  .data(color.domain().slice().reverse())
+			  .join("g")
+			  .attr("transform", (d, i) => `translate(0,${i * 20})`);
+
+			g.append("rect")
+			  .attr("x", -19)
+			  .attr("width", 19)
+			  .attr("height", 19)
+			  .attr("fill", color);
+
+			g.append("text")
+			  .attr("x", -24)
+			  .attr("y", 9.5)
+			  .attr("dy", "0.35em")
+			  .text(d => d);
+		  }
+
+		  svg = rightGraph.append("svg")
+			.attr("width", "100%")
+			.attr("height", height + margin.top + margin.bottom);
+		  div = rightGraph.append("div")
+			.attr("class", "tooltip devburndown")
+			.style("opacity", 0);
+		  // Chart title
+		  svg.append("text")
+			.attr("x", (width / 2))
+			.attr("y", margin.top)
+			.attr("text-anchor", "middle")
+			.style("font-size", "20px")
+			.style("text-decoration", "underline")
+			.text("Developer Load");
+		  g = svg.append("g") // Whole graph boundary
+			.attr("transform", "translate(" + margin.left + ", 0)");
+
+		  bar = g.selectAll("rect")
+			.data(data)
+			.enter()
+			.append("g")
+			.attr("transform", d => `translate(${x0(d[groupKey])},0)`)
+
+		  // Add bars
+		  bar.selectAll("rect")
+			.data(d => keys.map(key => ({
+				key,
+				value: d[key]
+			})))
+			.enter()
+			.append("rect")
+			.attr("x", d => x1(d.key))
+			.attr("y", d => y(d.value))
+			.attr("width", x1.bandwidth())
+			.attr("height", d => y(0) - y(d.value))
+			.attr("fill", d => color(d.key))
+			.on("mouseover", function(event, d) {
+				div.transition().duration(200).style("opacity", .9);
+				div.html(d.key + ": " + d.value + " days")
+					.style("left", (event.pageX) + "px")
+					.style("top", (event.pageY - 128) + "px");
+			})
+			.on("mouseout", function(d) {
+				div.transition().duration(500).style("opacity", 0);
+			})
+
+		  bar.selectAll("text")
+			.data(d => keys.map(key => ({
+				key,
+				value: d[key]
+			})))
+			.enter()
+			.append("text")
+			.attr("dx", "1.4em")
+			.attr("dy", "-0.3em")
+			.attr("x", d => x1(d.key))
+			.attr("y", d => y(d.value))
+			.attr("text-anchor", "middle")
+			.attr("font-family", "sans-serif")
+			.attr("font-size", "11px")
+			.attr("fill", "black")
+			.text(d => d.value);
+
+		  g.append("g")
+			.call(xAxis);
+
+		  g.append("g")
+			.call(yAxis);
+
+		  g.append("g")
+			.call(legend);
+		}
+		drawGraphs(project, ms);
+	  }
+	
+	  function projectbd() {
+		var project = editor.getValue();
+		// WORKAROUND: Bug causes scope not to sync
+		project.tracking.scope = editor.getEditor("root.tracking.scope").getValue();
+		var ms = getCurrentMS(project);
+		if (ms < 0) return;
+		
+		var reqtburndown = project
+		  .tracking
+		  .scope
+		  .filter(w =>  w.status != 'Obsolete') // All requirement in this MS
+		  .map(s => (s.burndown.milestones
+            .map(m => m.remaining))
+            .reduce((a,b) => a.concat(b)));
+		var weeks = reqtburndown[0].map(r => r.date);
+		var burndown = [{
+		  "date": "Start",
+		  "effort": project
+			.tracking
+			.scope
+			.filter(w =>  w.status != 'Obsolete')
+			.reduce((a, b) => { return { "estimate": a.estimate + b.estimate } })
+			.estimate
+		}];
+		for (w in weeks) {
+		  burndown.push(reqtburndown.map(r => r[w])
+			.reduce((a, b) => {
+			  return { "date": b.date, "effort": a.effort + b.effort };
+			})
+		  )
+		}
+		// Make burndown slope
+		var capacity = 0;
+		for (var m in project.bandwidth.milestones) {
+		  capacity += getMSCapacity(project, m);
+		}
+		var blackoutweeks = getBlackedOutWeeks(project);
+		var week = 0;
+		burndown[week++].target = capacity;
+		for (var ms in project.bandwidth.milestones) {
+		  var mscapacity = getMSCapacity(project, ms);
+		  var workingweeks = getWorkingWeeks(project, ms);
+		  var slope = mscapacity / workingweeks.length;
+		  var duration = project.bandwidth.milestones[ms].duration;
+		  for (var w = 0; w < project.bandwidth.milestones[ms].duration; w++) {
+			if (week > 0
+			  && blackoutweeks.filter(w => w == burndown[week - 0].date).length == 0) {
+			  capacity -= slope;
+			}
+			burndown[week++].target = capacity;
+		  }
+		}
+		
+		var ymax = burndown.reduce((a,b) => a.effort > b.effort ? a : b).effort;
+		
+		var margin = {top: 20, right: 20, bottom: 30, left: 40},
+		  width = 900,
+		  height = 300;
+		  
+		var board = d3.select("#graph")
+		  .append("div")
+		  .style("width", '100%')
+		  .style("height", 500);
+		  
+		var xScale = d3.scaleBand()
+		  .rangeRound([0, width])
+		  .padding(0.2)
+		  .domain(burndown.map(b => b.date));
+		var yScale = d3.scaleLinear()
+		  .rangeRound([height, 0])
+		  .domain([0, ymax * 1.2]);
+		  
+		var svg = board.append("svg")
+		  .attr("width", "100%")
+		  .attr("height", height + margin.top + margin.bottom);
+		// Tooltip
+		var div = board.append("div")
+		  .attr("class", "tooltip")
+		  .style("opacity", 0);
+		
+		// Chart title
+		svg.append("text")
+		  .attr("x", (width / 2))
+		  .attr("y", margin.top)
+		  .attr("text-anchor", "middle")
+		  .style("font-size", "20px")
+		  .style("text-decoration", "underline")
+		  .text("Project Burndown");
+		
+		var g = svg.append("g")
+		  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+		// height of axis-x from bottom of graph
+		g.append("g")
+		  .attr("class", "axis axis--x")
+		  .attr("transform", "translate(0," + height + ")")
+		  .call(d3.axisBottom(xScale));
+		// axis-y
+		g.append("g")
+		  .attr("class", "axis axis--y")
+		  .call(d3.axisLeft(yScale));
+		  
+		var bar = g.selectAll("rect")
+		  .data(burndown)
+		  .enter().append("g");
+
+		// Bars
+		bar.append("rect")
+		  .attr("x", function(d) { return xScale(d.date); })
+		  .attr("y", function(d) { return yScale(d.effort); })
+		  .attr("width", xScale.bandwidth())
+		  .attr("height", function(d) { return height - yScale(d.effort); })
+		  .attr("class", "plainbar bar1");
+		// labels on the bar chart
+		bar.append("text")
+		  .attr("dy", "1.3em")
+		  .attr("x", function(d) { return xScale(d.date) + xScale.bandwidth() / 2; })
+		  .attr("y", function(d) { return yScale(d.effort); })
+		  .attr("text-anchor", "middle")
+		  .attr("font-family", "sans-serif")
+		  .attr("font-size", "11px")
+		  .attr("fill", "black")
+		  .text(function(d) { return d.effort > 0 ? d.effort : ''; });
+		  
+		// Ideal burndown line
+		var greenline = d3.line()
+		  .x(function(d, i) { return xScale(d.date) + xScale.bandwidth() / 2; })
+		  .y(function(d) { return yScale(d.target); });
+		bar.append("path")
+		  .attr("class", "greenline")
+		  .attr("d", greenline(burndown));
+		bar.append("circle")
+		  .attr("class", "greendot")
+		  .attr("cx", function(d, i) { return xScale(d.date) + xScale.bandwidth() / 2; })
+		  .attr("cy", function(d) { return yScale(d.target); })
+		  .attr("r", 3	)
+		  .on("mouseover", function(event,d) {
+			div.transition().duration(200).style("opacity", .9);
+			div.html("Week: " + d.date + "<br/>Capacity: " + Math.floor(d.target))
+			  .style("left", (event.pageX) + "px")
+			  .style("top", (event.pageY - 128) + "px");
+			})
+		  .on("mouseout", function(d) {
+			div.transition().duration(500).style("opacity", 0);
+		  });
+		bar.append("text")
+		  .attr("dx", "1.3em")
+		  .attr("dy", "0.5em")
+		  .attr("x", function(d, i) { return xScale(d.date) + xScale.bandwidth() / 2; })
+		  .attr("y", function(d) { return yScale(d.target); })
+		  .attr("text-anchor", "middle")
+		  .attr("font-family", "sans-serif")
+		  .attr("font-size", "11px")
+		  .attr("fill", "black")
+		  .text(function(d) { return d.target > 0 ? Math.floor(d.target) : ''; });
+	  }
+
+	  function splitBD() {
+		var project = editor.getValue();
+		// WORKAROUND: Bug causes scope not to sync
+		project.tracking.scope = editor.getEditor("root.tracking.scope").getValue();
+		var ms = getCurrentMS(project);
+		if (ms < 0) return;
+	
+		var margin = {top: 20, right: 20, bottom: 30, left: 40},
+		  width = 600,
+		  height = 300;
+		
+		// Set up left and right screen halves
+		var board = d3.select("#graph")
+		  .append("div")
+		  .style("width", '100%')
+		  .style("height", 500);
+		board.append("div")
+		  .append("text")
+		  .text("Milestone: ")
+		  .append("select")
+		  .style("width", '100%')
+		  .attr("id", "selectMS")
+		  .style("width", '50px')
+		  .selectAll("milestones")
+		  .data(project.bandwidth.milestones.map(m => m.milestone))
+		  .enter()
+		  .append("option")
+		  .text(d => d)
+		  .attr("value", d => parseInt(d.substring(1)) - 1);
+		d3.select('#selectMS').property('value', ms);
+		var leftGraph = board.append("div")
+		  .attr("id", "leftGraph")
+		  .style("width", "50%")
+		  .style("height", "100%")
+		  .style("float", "left");
+		var rightGraph = board.append("div")
+		  .attr("id", "rightGraph")
+		  .style("margin-left", "50%")
+		  .style("height", "100%");
+		d3.select("#selectMS").on("change", function(d) {
+          var ms = d3.select(this).property("value");
+		  document.getElementById("leftGraph").textContent = '';
+		  document.getElementById("rightGraph").textContent = '';
+		  drawGraphs(project, ms);
+		});
+		
+		var xScale, yScale, svg, div, g;
+		
+		function drawGraphs(project, ms) {
+		  ms = parseInt(ms);
+		  var fdata = getMSFeatureBurndown(project, ms);
+		  drawPaper(project, ms, leftGraph, "Feature Burndown", fdata);
+		  var udata = getDevMSBurndown(project, ms);
+		  drawPaper(project, ms, rightGraph, "Developer Burndown", udata);
+		}
+		
+		function drawPaper(project, ms, paper, title, data) {
+		  var capacity = getMSCapacity(project, ms);
+		  var maxremainder = getMaxRemainder(project, ms);
+		  var ymax = Math.max(capacity, maxremainder);
+		  var workingweeks = getWorkingWeeks(project, ms);
+		  
+		  var groups = data.map(d => d.group);
+		  var subgroups = Object.keys(data[0]).filter(k => k != "group");
+
+		  var color = d3.scaleOrdinal()
+			.domain(subgroups)
+			.range(['#e41a1c','#377eb8','#4daf4a']);
+
+		  xScale = d3.scaleBand()
+			.rangeRound([0, width])
+			.padding(0.2)
+			.domain(groups);
+		  yScale = d3.scaleLinear()
+			.rangeRound([height, 0])
+			.domain([0, ymax * 1.2]);
+
+		  svg = paper.append("svg")
+			.attr("width", "100%")
+			.attr("height", height + margin.top + margin.bottom);
+		  // Tooltip
+		  tooltip = paper.append("div")
+			.attr("class", "tooltip")
+			.style("width", 250)
+			.style("opacity", 0);
+		  // Chart title
+		  svg.append("text")
+			.attr("x", (width / 2))
+			.attr("y", margin.top)
+			.attr("text-anchor", "middle")
+			.style("font-size", "20px")
+			.style("text-decoration", "underline")
+			.text(title);
+		  g = svg.append("g")
+			.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+		  // height of axis-x from bottom of graph
+		  g.append("g")
+			.attr("class", "axis axis--x")
+			.attr("transform", "translate(0," + height + ")")
+			.call(d3.axisBottom(xScale));
+		  // axis-y
+		  g.append("g")
+			.attr("class", "axis axis--y")
+			.call(d3.axisLeft(yScale));
+		  // Legend
+		  var legend = g.append("g")
+			  .attr("transform", `translate(${width},0)`)
+			  .attr("text-anchor", "end")
+			  .attr("font-family", "sans-serif")
+			  .attr("font-size", 10)
+			  .selectAll("g")
+			  .data(color.domain().slice())
+			  .join("g")
+			  .attr("transform", (d, i) => {
+				return `translate(0,${i * 20})`;
+			  });
+			  
+			legend.append("rect")
+			  .attr("x", -19)
+			  .attr("width", 19)
+			  .attr("height", 19)
+			  .attr("fill", color);
+
+			legend.append("text")
+			  .attr("x", -24)
+			  .attr("y", 9.5)
+			  .attr("dy", "0.35em")
+			  .text(d => d);
+		  
+		  var stackedData = d3.stack()
+			.keys(subgroups)
+			(data)
+
+		  // Show the bars
+		  var bar = g.append("g")
+			.selectAll("g")
+			// Enter in the stack data = loop key per key = group per group
+			.data(stackedData)
+			.enter().append("g")
+			  .attr("fill", d => color(d.key))
+			  
+		  var bar_enter = bar.selectAll("rect")
+			.data(d => d)
+			.enter().append("rect")
+			  .attr("x", d => xScale(d.data.group))
+			  .attr("y", d => yScale(d[1]))
+			  .attr("height", d => yScale(d[0]) - yScale(d[1]))
+			  .attr("width",xScale.bandwidth())
+				
+		  bar.on("mouseover", function(event, d) {
+			tooltip.transition().duration(200).style("opacity", .9);
+			var current = document.querySelectorAll(':hover');
+			var info = current[current.length - 1].__data__;
+			var remaining = info[1] - info[0];
+			var tip = "<b>Dev.</b>"  + d.key + "<br><b>Remaining:</b> " + remaining;
+			if (title.startsWith("Feature")) {
+			  tip = "<b>Req#:</b> " + d.key + "<br><b>Remaining:</b> " + remaining;
+			}
+			tooltip.html(tip)
+			  .style("left", (event.pageX) + "px")
+			  .style("top", (event.pageY - 128) + "px");
+			})
+			.on("mouseout", function(d) {
+			  tooltip.transition().duration(500).style("opacity", 0);			  // enter a second time = loop subgroup per subgroup to add all rectangles
+			})
+		}
+		drawGraphs(project, ms);
+	  }
+	  
+	  function makeButton(id, title) {
+		var graphbutton = document.createElement("button");
+		graphbutton.classList.add("btn");
+		graphbutton.classList.add("btn-sm");
+		graphbutton.classList.add("btn-primary");
+		graphbutton.classList.add("mr-2");
+		graphbutton.id = id;
+		graphbutton.textContent = title;
+		return graphbutton;
+	  }
+	  
+	  var graphsdiv = document.querySelector("div#Graphs label + div");
+	  var projectgraphs = document.createElement("div");
+	  projectgraphs.id = "projectgraphs";
+	  
+	  var graphs = document.createElement("div");
+	  graphs.classList.add("graphs");
+	  
+	  var column = document.createElement("div");
+	  column.classList.add("column");
+	  column.classList.add("col-md-12");
+	  column.style.marginTop = "15px";
+	  
+	  column.appendChild(makeButton("milestonebd", "Milestone")); 
+	  column.appendChild(makeButton("projectbd", "Release")); 
+	  column.appendChild(makeButton("splitbd", "Feature/Developer")); 
+
+	  var breakline = document.createElement("div");
+	  breakline.appendChild(document.createElement("br"));
+	  
+	  var grapharea = document.createElement("div");
+	  grapharea.id = "graph";
+	  grapharea.style.width = "100%";
+	  grapharea.style.height = "375px";
+	  
+	  graphs.appendChild(column);
+	  graphs.appendChild(breakline);
+	  graphs.appendChild(grapharea);
+	  projectgraphs.appendChild(graphs);
+	  graphsdiv.appendChild(projectgraphs);
+	  
+	  document.getElementById('Graphs').addEventListener('click', function() {
+		  document.getElementById("graph").textContent = '';
+		  milestonebd();
+	  });
+	  
+	  document.getElementById('milestonebd').addEventListener('click', function() {
+		  document.getElementById("graph").textContent = '';
+		  milestonebd();
+	  });
+		  
+	  document.getElementById('projectbd').addEventListener('click', function() {
+		  document.getElementById("graph").textContent = '';
+		  projectbd();
+	  });
+		  
+	  document.getElementById('splitbd').addEventListener('click', function() {
+		  document.getElementById("graph").textContent = '';
+		  splitBD();
+	  });
+	  
+    </script>
+  </body>
+</html>
