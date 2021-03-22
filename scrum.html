@@ -967,16 +967,17 @@
 	  });
 	  
 	  editor.on('deleteRow', ed => {
-		console.log('deleteRow: Entering with', ed.path);
-		var startdate = editor.getEditor('root.bandwidth.startdate').getValue();
-		if (!startdate || startdate.length == 0) return;
+		//console.log('deleteRow: Entering with', ed.path);		
 		  
 		if (ed && ed.path) {
 		  if (ed.path.match(/root.tracking.scope.[0-9]+/)) {
 // WORKAROUND: Prevents exception after deleting requirement
-			editor.getEditor('root.tracking.scope').setValue(project.tracking.scope);
+			var scope = editor.getEditor('root.tracking.scope').getValue();
+			editor.getEditor('root.tracking.scope').setValue(scope);
 		  }
 		  if (ed.path.match(/root.bandwidth.milestones.[0-9]+/)) {
+			var startdate = editor.getEditor('root.bandwidth.startdate').getValue();
+			if (!startdate || startdate.length == 0) return;
 			setProjectEndDate();
 			unwatchScopeChange();
 			var milestones = editor.getEditor("root.bandwidth.milestones").getValue();
