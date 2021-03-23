@@ -1629,11 +1629,14 @@ console.log("Start date changed");
 		  requirements = requirements.map(s => s.burndown.milestones[ms].remaining);
 		
 		var efforts = [{ 'week': 'Start', 'total': getMSEstimate(ms) }];
+		var today = new Date();
+		var weekno = Math.ceil((today - getDateMSStart(ms)) / (1000 * 3600 * 24 * 7));
 		getWeeks(ms).forEach(w => {
 		  var total = 0;
-		  for (var r in requirements) {
-			total += requirements[r].filter(wk => wk.date == w)[0].effort
-		  }
+		  if (efforts.length <= weekno)
+			for (var r in requirements) {
+			  total += requirements[r].filter(wk => wk.date == w)[0].effort
+			}
 		  efforts.push({ 'week': w, 'total': total });
 		});
 		return efforts;
@@ -1657,6 +1660,8 @@ console.log("Start date changed");
 		var weeks = getWeeks(ms);
 		weeks.unshift("Start");
 		var dataset = [reqts];
+		var today = new Date();
+		var weekno = Math.ceil((today - getDateMSStart(ms)) / (1000 * 3600 * 24 * 7));
 		for (var w in weeks) {
 		  var rlist = [];
 		  for (var r in reqts) {
@@ -1664,12 +1669,17 @@ console.log("Start date changed");
 			  rlist.push(weeks[w]);
 			}
 			else {
-			  if (w == 0) { // First row, use estimates
+			  if (w == 0) { // First column, use estimates
 			    rlist.push(requirements[r - 1].estimate)
 			  }
 			  else {
-				rlist.push(requirements[r - 1].burndown.milestones[ms]
-				  .remaining.filter(r => r.date == weeks[w])[0].effort);
+				if (dataset.length <= weekno + 1) {
+				  rlist.push(requirements[r - 1].burndown.milestones[ms]
+					.remaining.filter(r => r.date == weeks[w])[0].effort);
+				} 
+				else {
+				  rlist.push(0);
+				}
 			  }
 			}
 		  }
@@ -1697,6 +1707,8 @@ console.log("Start date changed");
 			.getValue().filter(a => a.name.length && a.role != 'QA')
 			.map(d => d.name);
 		var dataset = [];
+		var today = new Date();
+		var weekno = Math.ceil((today - getDateMSStart(ms)) / (1000 * 3600 * 24 * 7));
 		for (var w in weeks) {
 		  var workweek = { "group": weeks[w] };
 		  for(var d in teamDevs) {
@@ -1714,11 +1726,16 @@ console.log("Start date changed");
 			}
 			else {
 			  if (workweek[teamDevs[d]].length) {
-				workweek[teamDevs[d]] = workweek[teamDevs[d]]
-				  .map(r => r.burndown.milestones[ms].remaining
-				  .filter(s => s.date == weeks[w])
-				  .map(r => r.effort)[0])
-				  .reduce((a, b) => a + b);
+				if (dataset.length <= weekno) {
+				  workweek[teamDevs[d]] = workweek[teamDevs[d]]
+					.map(r => r.burndown.milestones[ms].remaining
+					.filter(s => s.date == weeks[w])
+					.map(r => r.effort)[0])
+					.reduce((a, b) => a + b);
+				}
+				else {
+				  workweek[teamDevs[d]] = 0;
+				}
 			  }
 			  else {
 				workweek[teamDevs[d]] = 0;
@@ -2163,12 +2180,19 @@ console.log("Start date changed");
 			.reduce((a, b) => { return { "estimate": a.estimate + b.estimate } })
 			.estimate
 		}];
+		var today = new Date();
+		var weekno = Math.ceil((today - getDateMSStart(0)) / (1000 * 3600 * 24 * 7));
 		for (w in weeks) {
-		  burndown.push(reqtburndown.map(r => r[w])
-			.reduce((a, b) => {
-			  return { "date": b.date, "effort": a.effort + b.effort };
-			})
-		  )
+		  if (w < weekno) {
+			burndown.push(reqtburndown.map(r => r[w])
+			  .reduce((a, b) => {
+			    return { "date": b.date, "effort": a.effort + b.effort };
+			  })
+			)
+		  }
+		  else {
+			burndown.push({ "date": weeks[w], "effort": 0 });
+		  }
 		}
 		// Make burndown slope
 		var capacity = 0;
