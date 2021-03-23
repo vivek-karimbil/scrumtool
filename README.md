@@ -121,10 +121,50 @@ effort (i.e. increase the remining effort), than to change the estimate. This pr
 
 ## FAQ
 - How can I start with a planning milestoe, which is used for design, POCs and other activities not directly contributing to burndown?
+
+You can make the capacity of the milestone reflect this. Reduce the capacity of the team members anywhere down to 0% to refleact that their activity was used for
+requirements discussions, design, prototyping, demos, trainng or whatever, but not amounting to code that went into the product. It is possible to allocate hours
+and track against some activities, but it they do not go into building the product, analysis on time it took to purely build the product becomes hard to extrct
+and analyse.
+
 - How can I create gaps between Milestones?
+
+One way would be to add blackout weeks at the beginning or end of a milestone. Another would be to have a milestone with no work assigned inbetween.
+
 - How can I use a 6 day week?
+
+The percentage utilization is based on a 5 day week, and raising this by 20% per day gives more capacity. The default of this to 80% in the tool is meant to
+reflect that while 4 days a week goes towards developing features in the releae, one day is reserved for other non feature building activities, such as interviews,
+training, defect fixes in previous versions of the software, reviews of other peoples work, meetings, and so on. Based on how much non-project effort is
+anticipated this could be dialed up or down. The default for a lead is set to 40% assuming that the lead will spend time reviewing other peoples code, triaging
+issues, tracking details, etc, and wont have all time available to sppend on development. These numbers are defaults that can be altered to match project
+realities.
+
 - How can I assign an exceptional developer more work?
+
+By increasing the developer capacity to reflects their relative productivity - like 150% or 200%. Wach out for buy in and burn out when doing such things.
+
 - How can I start on a day other than a Monday, or end on a day other than a Friday?
-- How can I accomodate different amount of productivity for newcomers, senior vs junior developers, poor performers...?
+
+Pad holidays into the schedule. The default settings have 2 holidays per developer into each default 4 week milestone. The number of holidays can be bumpled
+up to reflect starting later than a Monday. However, the week boundaries do not overlap, so finishing a milestone in the middle of a week, and starting the
+next one in the same week would not work.
+
+- How can I accomodate different amount of productivity for newcomers, senior vs junior developers, part timers, poor performers...?
+
+You can change their capacity to reflect how much they can burn down. The reason is not captured. Someone could be at 50% capacity because they were still
+ramping up on the technology, or were new to the product, or was just fresh out of college, or had health issues, or anything else. Setting the percentage
+to reflect the expected contribution for whatever reason covers all scenarios.
+
 - How can I enter data for features that will take more than a milestone to develop?
+
+The feature can be split into rows refecting the testable chunks, or activities that will be built in each milestone. Another way would be to transfer the
+development capacity to the next milestone by making it 0 in the current one. This is harder to track than the first method. The spirit of scrum being testable
+chunks every week, the first approach is preferable.
+
 - How can I decide that the QA is done, and the feature is complete?
+
+Create and use your own done criteria. One I used was that test cases needed to be written up front, divided into acceptance and alpha tests. The acceptance
+tests had to pass for us to claim the feature was supported. The alpha tests walked through the major use cases of the feature. 100% of the acceptance and 90%
+of the alpha test cases had to pass for the feature to be considered built. If not, the feature could be moved to the next milestone or even droped. The milestone
+could be extended till the test passed, but the scrum methodology frowns on that.
