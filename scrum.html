@@ -921,7 +921,9 @@
 			  scope[r].burndown.milestones.push(msSchedule);
 			}
 		  }
+		  unwatchScopeChange();
 		  editor.getEditor('root.tracking.scope').setValue(scope);
+		  watchScopeChange
 
 		  setProjectEndDate();
 		}
@@ -2004,6 +2006,7 @@ console.log("Start date changed");
 //--------------------------------------------------------------------------------------------
 		  var milestone = project.bandwidth.milestones[ms];
 		  var capacity = milestone.capacity;
+		  if (!capacity.length) return;
 		  var scope = project.tracking.scope.filter(s => s.milestone == 'M' + (ms + 1));
 		  var data = capacity.map(c => {
 			return {
