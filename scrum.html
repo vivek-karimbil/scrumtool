@@ -923,7 +923,7 @@
 		  }
 		  unwatchScopeChange();
 		  editor.getEditor('root.tracking.scope').setValue(scope);
-		  watchScopeChange
+		  watchScopeChange();
 
 		  setProjectEndDate();
 		}
@@ -969,7 +969,7 @@
 	  });
 	  
 	  editor.on('deleteRow', ed => {
-		//console.log('deleteRow: Entering with', ed.path);		
+		// console.log('deleteRow: Entering with', ed.path);		
 		  
 		if (ed && ed.path) {
 		  if (ed.path.match(/root.tracking.scope.[0-9]+/)) {
@@ -1052,6 +1052,63 @@
 	  // For scope changes, such as adding new MSs, change in estimate
 	  editor.watch('root.tracking.scope', watchScopeChange);
 
+	  function burndownChanged(r, m, w) {
+	    // console.log('Burndown change: r[' + r + '].m[' + m + '].w[' + w + ']');
+		var burndownpath = 'root.tracking.scope.' + r + '.burndown';
+	    var path = burndownpath + '.milestones.' + m + '.remaining.' + w + '.effort';
+		if (!editor.getEditor(path)) return;
+		unwatchScopeChange();
+		var effort = editor.getEditor(path).getValue();
+		var burndown = editor.getEditor(burndownpath).getValue();
+		var wk = w;
+		for (var ms = m; ms < burndown.milestones.length; ms++) {
+		  while (wk < burndown.milestones[ms].remaining.length) {
+		    burndown.milestones[ms].remaining[wk].effort = effort;
+			wk++;
+		  }
+		  wk = 0;
+		}
+		var ed = editor.getEditor(burndownpath);
+		if (ed) ed.setValue(burndown);
+		watchScopeChange();
+	  }
+
+	  function callbackFor(r, m, w) {
+		return function(err) { burndownChanged(r, m, w) }
+	  }
+	  
+ 	  function watchScopeChange() {
+	    // console.log('Setup scope change listeners');
+	    editor.unwatch('root.tracking.scope');
+		// Check and set up any mising listeners for all requirements
+		// Every requirements should have estimate and tracking listeners
+		var scope = editor.getEditor("root.tracking.scope").getValue();
+		for (var r in scope) {
+		  // Set up listener for estimate changes
+		  var path = 'root.tracking.scope.' + r + '.estimate';
+		  if (!editor.watchlist[path])
+			editor.watch(path, () => { estimateChanged(scope[r], r); });
+
+		  var milestones = scope[r].burndown.milestones;
+		  for (var m in milestones) {
+			var weeks = milestones[m].remaining;
+			for (var w in weeks) {
+			  var path = 'root.tracking.scope.' + r + '.burndown.milestones.' + m +
+			    '.remaining.' + w + '.effort';
+			  if (!editor.watchlist[path]) {
+				editor.watch(path, callbackFor(r, m, w));
+			  }
+			}
+		  }
+		}
+		editor.watch('root.tracking.scope', watchScopeChange);
+	  }
+	  
+	  function unwatchScopeChange()  {
+		Object.keys(editor.watchlist)
+		  .filter(l => l.startsWith('root.tracking')).forEach(l => editor.unwatch(l));
+	  }
+
 	  function readProjectFile(input) {
 		document.getElementById('load').textContent = "Load Project";
 	    document.getElementById("dataread").style.display = "none";
@@ -1075,6 +1132,20 @@
 		};
 	  }
 
+	  function estimateChanged(requirement, r) {
+		// console.log('Estimate changed for requirement[' + r + ']');
+		var estimate = editor.getEditor('root.tracking.scope.' + r + '.estimate').getValue();
+		var burndown = editor.getEditor('root.tracking.scope.' + r + '.burndown').getValue();
+		unwatchScopeChange();
+		for (var m in burndown.milestones) {
+			for (var w in burndown.milestones[m].remaining) {
+			  burndown.milestones[m].remaining[w].effort = estimate;
+			}
+		}
+		editor.getEditor('root.tracking.scope.' + r + '.burndown').setValue(burndown);
+	    watchScopeChange();
+	  }
+	  
 	  // Highligt the remaining effort for the current week
 	  function highLightThisWeek() {
 		project = editor.getValue();
@@ -1334,40 +1405,6 @@
 		})
 	  }
   
- 	  function watchScopeChange() {
-	    // console.log('scope change');
-	    editor.unwatch('root.tracking.scope');
-		// Check and set up any mising listeners for all requirements
-		// Every requirements should have estimate and tracking listeners
-		var scope = editor.getEditor("root.tracking.scope").getValue();
-		for (var r in scope) {
-		  // Set up listener for estimate changes
-		  var path = 'root.tracking.scope.' + r + '.estimate';
-		  if (!editor.watchlist[path])
-			editor.watch(path, () => { estimateChanged(scope[r], r); });
-
-		  var milestones = scope[r].burndown.milestones;
-		  for (var m in milestones) {
-			var weeks = milestones[m].remaining;
-			for (var w in weeks) {
-			  var path = 'root.tracking.scope.' + r + '.burndown.milestones.' + m +
-			    '.remaining.' + w + '.effort';
-			  if (!editor.watchlist[path]) {
-				var path = 'root.tracking.scope.' + r + '.burndown.milestones.' + m +
-				  '.remaining.' + w + '.effort';
-				editor.watch(path, () => burndownChanged(r, m, w));
-			  }
-			}
-		  }
-		}
-		editor.watch('root.tracking.scope', watchScopeChange);
-	  }
-	  
-	  function unwatchScopeChange()  {
-		Object.keys(editor.watchlist)
-		  .filter(l => l.startsWith('root.tracking')).forEach(l => editor.unwatch(l));
-	  }
-
 	  // Get start Date() of MS 
 	  function getDateMSStart(msnumber) {
 	    var startdate = editor.getEditor('root.bandwidth.startdate').getValue();
@@ -1411,41 +1448,6 @@
 		return remaining;
 	  }
 	  
-	  function estimateChanged(requirement, r) {
-		// console.log('Estimate changed for requirement[' + r + ']');
-	    editor.unwatch('root.tracking.scope');
-		var estimate = editor.getEditor('root.tracking.scope.' + r + '.estimate').getValue();
-		var burndown = editor.getEditor('root.tracking.scope.' + r + '.burndown').getValue();
-		for (var m in burndown.milestones) {
-			for (var w in burndown.milestones[m].remaining) {
-			  burndown.milestones[m].remaining[w].effort = estimate;
-			}
-		}
-		editor.getEditor('root.tracking.scope.' + r + '.burndown').setValue(burndown);
-	    editor.watch('root.tracking.scope', watchScopeChange);
-	  }
-	  
-	  function burndownChanged(r, m, w) {
-	    // console.log('Burndown change: r[' + r + '].m[' + m + '.w[' + w + ']');
-		var burndownpath = 'root.tracking.scope.' + r + '.burndown';
-	    var path = burndownpath + '.milestones.' + m + '.remaining.' + w + '.effort';
-		if (!editor.getEditor(path)) return;
-		unwatchScopeChange();
-		var effort = editor.getEditor(path).getValue();
-		var burndown = editor.getEditor(burndownpath).getValue();
-		var wk = w;
-		for (var ms = m; ms < burndown.milestones.length; ms++) {
-		  while (wk < burndown.milestones[ms].remaining.length) {
-		    burndown.milestones[ms].remaining[wk].effort = effort;
-			wk++;
-		  }
-		  wk = 0;
-		}
-		var ed = editor.getEditor(burndownpath);
-		if (ed) ed.setValue(burndown);
-		watchScopeChange();
-	  }
-	  	  
 	  // Set the start date of the MS in the Bandwidth tab
 	  // Called when duration of any MS changes
 	  function setMSStartDates(jseditor, e) {
@@ -1459,7 +1461,6 @@
 		if (thisMS == 0 && milestones.length && milestones[0].msstartdate &&
 		  milestones[0].msstartdate != startdate.split('/')
 		  .map(d => parseInt(d)).filter(i => i < 32).join("/")) {
-console.log("Start date changed");
 		  realignBurndown(milestones);
 		}
 		// If a MS duration was changed
