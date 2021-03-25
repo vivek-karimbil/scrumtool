@@ -404,8 +404,8 @@
 							"availability": {
 							  "title": "Availabe %",
 							  "type": "string",
-							  "input_width": "100px",
 							  "options": {
+							    "input_width": "100px",
 							    "imask": {
 								  "mask": "val{%}",
 								  "lazy": false,
@@ -421,7 +421,9 @@
 							"vacation": {
 							  "title": "Days off",
 							  "type": "number",
-							  "input_width": "100px"
+							  "options": {
+								"input_width": "70px"
+							  }
 							}
 						  }
 						}
@@ -1134,6 +1136,7 @@
 
 	  function estimateChanged(requirement, r) {
 		// console.log('Estimate changed for requirement[' + r + ']');
+		if (!requirement) return;
 		var estimate = editor.getEditor('root.tracking.scope.' + r + '.estimate').getValue();
 		var burndown = editor.getEditor('root.tracking.scope.' + r + '.burndown').getValue();
 		unwatchScopeChange();
