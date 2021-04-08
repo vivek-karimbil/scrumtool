@@ -117,7 +117,7 @@
 			var reqtpath = requirement.path.match(/root.tracking.scope.[0-9]+/)[0];
 			var description = editor.getEditor(reqtpath + ".description").getValue();
 			if (description) {
-			  var feature = ed.getValue().filter(r => r.destcription == description);
+			  var feature = ed.getValue().filter(r => r.description == description);
 			  if (feature.length) {
 			    return feature[0].feature;
 			  }
@@ -135,12 +135,12 @@
 			if (!ed) return [];
 			var reqtpath = requirement.path.match(/root.tracking.scope.[0-9]+/)[0];
 			if (id = document.querySelector('[data-schemapath="' + reqtpath + '.id"] input').value) {
-			  data = ed.getValue().filter(r => r.feature == id).map(r => r.destcription)
+			  data = ed.getValue().filter(r => r.feature == id).map(r => r.description)
 			}
 			else {
 			  planned = requirement.jsoneditor.getEditor("root.tracking.scope")
 			    .getValue().map(r => r.description);
-			  data = ed.getValue().map(r => r.destcription)
+			  data = ed.getValue().map(r => r.description)
 			    .filter(r => planned.filter(s => s == r).length == 0);
 			}
 			return data.filter(function(item) {
@@ -212,7 +212,7 @@
 						  "input_width": "100px"
 						}
 					  },
-					  "destcription": {
+					  "description": {
 						"title": "Description",
 						"type": "string",
 						"format": "textarea",
@@ -768,7 +768,7 @@
 		}
 	  });
 	  
-	  // Hook up the save button
+	  // Display the save form to get the filename
       document.getElementById('save').addEventListener('click', function() {
 	    var datasave = document.getElementById("datasave");
 		if (datasave.style.display === "none") {
@@ -787,6 +787,7 @@
 		}
 	  });
 	  
+	  // Save file once name is entered
 	  document.getElementById('savefile').addEventListener('click', function(e) {
 		e.preventDefault();
         var d = new Date();
@@ -815,7 +816,7 @@
       });
 	  
       // Hook up the Restore to Default button
-      document.getElementById('restore').addEventListener('click',function() {
+      document.getElementById('restore').addEventListener('click', function() {
 		editor.destroy();
         editor = new JSONEditor(document.getElementById('editor_holder'), projectschema);
       });
