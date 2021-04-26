@@ -908,6 +908,7 @@
 		return tr;
 	  }
 	  
+	  // Set up the requirement editor with data of the requirement
 	  function addRequirementButton(featureID) {
 		jseditor = reqteditor.getEditor("root.scope");
 		button = jseditor.getButton('', 'edit', "Edit requirement");
@@ -995,6 +996,7 @@
 		  var scopelist = document.getElementById("reqtlist");
 		  scopelist.appendChild(addReqtRow(requirement.scope));
 		}
+		updateRowMoveButtons("#reqthead", "#reqtlist");
 	  }
 	  
 	  // Add the edit/delete control buttons for the requirement row
