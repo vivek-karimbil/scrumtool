@@ -1384,7 +1384,8 @@
 		for (var i = 0; i < visibleReqts.length; i++) {
 		  reqt = visibleReqts[i];
 		  var td = reqt.querySelector(`td:nth-child(${arrowColumn})`)
-		  if (i > 0 && !reqt.querySelector("[title='Move up']")) {
+		  if (i > 0 && !reqt.querySelector("[title='Move up']")
+			&& jseditor.jsoneditor && jseditor.jsoneditor.options) {
 			button = jseditor.getButton('', 'moveup', "Move up");
 			button.addEventListener('click',
 			  e => reqtRowUp(e, theadid, tbodyid));
@@ -1393,7 +1394,8 @@
 			td.appendChild(button_holder);
 		  }
 		  if (i < visibleReqts.length - 1
-			&& !reqt.querySelector("[title='Move down']")) {
+			&& !reqt.querySelector("[title='Move down']")
+			&& jseditor.jsoneditor && jseditor.jsoneditor.options) {
 			button = jseditor.getButton('', 'movedown', "Move down");
 			button.addEventListener('click', 
 			  e => reqtRowDown(e, theadid, tbodyid));
