@@ -1257,11 +1257,17 @@
 		  e.stopPropagation();
 		  this.value = this.value == "1" ? "0" : "1";
 		  
+		  var scheditor = scheduleeditor.getEditor("root.scope");
 		  if (!scheditor.addproperty_holder)
 			scheditor.addproperty_holder = jseditor.theme.getModal();
 	      if (!scheditor.addproperty_list)
 			scheditor.addproperty_list = document.createElement('div');
 		  scheditor.addproperty_list.classList.add('property-selector');
+		  if (scheditor.addproperty_input) {
+		    delete scheditor.addproperty_input;
+			document.querySelectorAll("[placeholder='Property name...']")
+			  .forEach(e => { e.nextSibling.remove(); e.remove(); })
+		  }
 		  if (scheditor.addproperty_checkboxes)
 			scheditor.addproperty_list.innerHTML = '';
 		  scheditor.addproperty_checkboxes = {};
@@ -2108,7 +2114,7 @@ console.log("Unexpected to be here", jseditor.path);
 			  .filter(s => s.status == p).map(s => s.id)
 		  },
 		  trackingschema.schema.properties.scope.properties.status.enum,
-		  "#scopelist", "#scopehead");
+		  "#scopehead", "#scopelist");
 	  }
 	  
 	  function makeDevFilter(jseditor, column) {
@@ -2118,7 +2124,7 @@ console.log("Unexpected to be here", jseditor.path);
 		  },
 		  project.bandwidth.team
 		  .filter(t => t.role != "QA").map(t => t.name),
-		  "#scopelist", "#scopehead");
+		  "#scopehead", "#scopelist");
 	  }
 	  
 	  function makeQAFilter(jseditor, column) {
@@ -2127,7 +2133,7 @@ console.log("Unexpected to be here", jseditor.path);
 			  .filter(s => s.resources.qa == p).map(s => s.id)
 		  }, project.bandwidth.team
 		  .filter(t => t.role == "QA").map(t => t.name),
-		  "#scopelist", "#scopehead");
+		  "#scopehead", "#scopelist");
 	  }
 
 	  function makeMSFilter(jseditor, column) {
@@ -2136,7 +2142,7 @@ console.log("Unexpected to be here", jseditor.path);
 			  .filter(m => m.milestone == p).map(s => s.id)
 		  }, project.bandwidth.milestones
 		  .map(m => m.milestone),
-		  "#scopelist", "#scopehead");
+		  "#scopehead", "#scopelist");
 	  }
 
 	  // Toggle column visibility
