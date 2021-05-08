@@ -1697,6 +1697,7 @@
 //-------------------- Add bandwidth configuration to MS
 		  var ms = jseditor.path.match(/[0-9]+$/)[0];
 		  var msName = 'M' + (parseInt(ms) + 1);
+		  jseditor.editors.milestone.setValue(msName);
 		 		  
 		  // When adding Milestones, add all developers to bandwidth of all milestones
 		  // if adding the first MS, create developer list 'manualy'
@@ -1785,6 +1786,7 @@
 		  if (currentreqt && thisreqt.length) { // If editing existing requirement
 			scheduleeditor.setValue(thisreqt[0]);
 		  }
+		  scheduleeditor.getEditor("root.bandwidth.milestones").setValue(milestones);
 		  setProjectEndDate();
 		}
 		
